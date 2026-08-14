@@ -1,0 +1,33 @@
+# Generated reference data — NEVER committed.
+#
+# Two reasons, both non-negotiable:
+#   1. It is other people's content. mccc_help.json is ~152 KB of Deaderpool's
+#      verbatim MCCC tooltip strings; the *_schema.json files are setting names
+#      and defaults extracted from MCCC and Kuttoe's mods.
+#   2. It embeds local absolute paths (C:\Users\<account>\...), which would
+#      publish the machine account name.
+#
+# All of it regenerates in seconds from a local install:
+#     py mccc-config/scripts/extract_schema.py
+#     py kuttoe-config/scripts/extract_kuttoe.py
+# Generated files also drift out of date the moment a mod updates, so shipping
+# the extractors rather than the extracts is the correct design regardless.
+mccc-config/reference/mccc_help.json
+mccc-config/reference/mccc_schema.json
+kuttoe-config/reference/kuttoe_schema.json
+
+# Generated reports about THIS user's library — personal, never committed.
+# adult_inventory.json is a categorised list of the user's NSFW mods by name;
+# report.json and the SFW plan enumerate their whole installed library.
+sims4-doctor/scripts/adult_inventory.json
+sims4-doctor/scripts/report.json
+sims4-doctor/scripts/SFW_PROFILE_PLAN.txt
+sims4-doctor/reference/
+*_inventory.json
+*_PLAN.txt
+
+# Local scratch and caches
+__pycache__/
+*.pyc
+*.bak
+reports/

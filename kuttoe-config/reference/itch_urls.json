@@ -1,0 +1,32 @@
+{
+  "index": "https://kuttoe.itch.io/",
+  "note": "itch.io pages describe features, not setting keys - use reference/kuttoe_schema.json for the contract",
+  "pages": {
+    "Ask Category & Menu Cleanup": "https://kuttoe.itch.io/ask-category",
+    "Basemental Addons": "https://kuttoe.itch.io/basemental-addons",
+    "Basic Burns": "https://kuttoe.itch.io/basic-burns",
+    "Career Overhaul Suite": "https://kuttoe.itch.io/career-overhaul-suite",
+    "Celebratio Spell": "https://kuttoe.itch.io/celebratio-spell",
+    "Enlist in War": "https://kuttoe.itch.io/enlist-in-war-mod",
+    "Festival Notification Rework": "https://kuttoe.itch.io/festival-notification-rework",
+    "Forbidden Spells": "https://kuttoe.itch.io/forbidden-spells",
+    "Home Regions": "https://kuttoe.itch.io/keep-sims-in-home-region",
+    "Incognito Spell": "https://kuttoe.itch.io/incognito-spell",
+    "Lifetime Quirks": "https://kuttoe.itch.io/lifetime-quirks",
+    "List of Mods": "https://kuttoe.itch.io/list-of-mods",
+    "NPCs Everywhere": "https://kuttoe.itch.io/npcs-everywhere",
+    "New Civic Policies": "https://kuttoe.itch.io/new-civic-policies",
+    "New Emotional Traits": "https://kuttoe.itch.io/new-emotional-traits",
+    "New Hobby Traits": "https://kuttoe.itch.io/new-hobby-traits",
+    "New Spa Day Traits": "https://kuttoe.itch.io/new-spa-day-traits",
+    "Pizza Preferences": "https://kuttoe.itch.io/pizza-preferences",
+    "Potions Rework": "https://kuttoe.itch.io/potions-rework",
+    "Random Texts and Calls": "https://kuttoe.itch.io/random-texts-and-calls",
+    "Spellcaster Tweaks": "https://kuttoe.itch.io/spellcaster-tweaks",
+    "Townie Demographics": "https://kuttoe.itch.io/townie-demographics",
+    "Traits by Scarlet": "https://kuttoe.itch.io/traits-by-scarlet",
+    "mini-mods: bug fixes": "https://kuttoe.itch.io/mini-mods-bug-fixes",
+    "mini-mods: small additions": "https://kuttoe.itch.io/mini-mods-small-additions",
+    "mini-mods: tweaks & changes": "https://kuttoe.itch.io/mini-mods-tweaks-and-changes"
+  }
+}

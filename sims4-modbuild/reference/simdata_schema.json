@@ -1,0 +1,240 @@
+{
+  "Buff": {
+    "row_size": 96,
+    "data_type": 13,
+    "schema_hash": 3706029267,
+    "schema_size": 96,
+    "columns": [
+      {
+        "name": "audio_sting_on_add",
+        "type": 19,
+        "flags": 0,
+        "offset": 0
+      },
+      {
+        "name": "audio_sting_on_remove",
+        "type": 19,
+        "flags": 0,
+        "offset": 16
+      },
+      {
+        "name": "buff_description",
+        "type": 20,
+        "flags": 0,
+        "offset": 32
+      },
+      {
+        "name": "buff_name",
+        "type": 20,
+        "flags": 0,
+        "offset": 36
+      },
+      {
+        "name": "cas_vfx",
+        "type": 11,
+        "flags": 0,
+        "offset": 40
+      },
+      {
+        "name": "icon",
+        "type": 19,
+        "flags": 0,
+        "offset": 48
+      },
+      {
+        "name": "mood_type",
+        "type": 18,
+        "flags": 0,
+        "offset": 64
+      },
+      {
+        "name": "mood_weight",
+        "type": 6,
+        "flags": 0,
+        "offset": 72
+      },
+      {
+        "name": "plumbob_vfx",
+        "type": 11,
+        "flags": 0,
+        "offset": 76
+      },
+      {
+        "name": "timeout_string",
+        "type": 20,
+        "flags": 0,
+        "offset": 80
+      },
+      {
+        "name": "timeout_string_no_next_buff",
+        "type": 20,
+        "flags": 0,
+        "offset": 84
+      },
+      {
+        "name": "ui_sort_order",
+        "type": 6,
+        "flags": 0,
+        "offset": 88
+      }
+    ]
+  },
+  "Trait": {
+    "row_size": 192,
+    "data_type": 13,
+    "schema_hash": 594527552,
+    "schema_size": 192,
+    "columns": [
+      {
+        "name": "ages",
+        "type": 14,
+        "flags": 0,
+        "offset": 0
+      },
+      {
+        "name": "bb_filter_styles",
+        "type": 14,
+        "flags": 0,
+        "offset": 8
+      },
+      {
+        "name": "bb_filter_tags",
+        "type": 14,
+        "flags": 0,
+        "offset": 16
+      },
+      {
+        "name": "cas_allowed_pack",
+        "type": 8,
+        "flags": 0,
+        "offset": 24
+      },
+      {
+        "name": "cas_idle_asm_key",
+        "type": 19,
+        "flags": 0,
+        "offset": 32
+      },
+      {
+        "name": "cas_idle_asm_state",
+        "type": 11,
+        "flags": 0,
+        "offset": 48
+      },
+      {
+        "name": "cas_selected_icon",
+        "type": 19,
+        "flags": 0,
+        "offset": 56
+      },
+      {
+        "name": "cas_trait_asm_param",
+        "type": 11,
+        "flags": 0,
+        "offset": 72
+      },
+      {
+        "name": "cas_trait_hidden",
+        "type": 0,
+        "flags": 0,
+        "offset": 76
+      },
+      {
+        "name": "cas_trait_vfx",
+        "type": 11,
+        "flags": 0,
+        "offset": 80
+      },
+      {
+        "name": "conflicting_traits",
+        "type": 14,
+        "flags": 0,
+        "offset": 84
+      },
+      {
+        "name": "display_name",
+        "type": 20,
+        "flags": 0,
+        "offset": 92
+      },
+      {
+        "name": "display_name_gender_neutral",
+        "type": 20,
+        "flags": 0,
+        "offset": 96
+      },
+      {
+        "name": "display_overrides",
+        "type": 14,
+        "flags": 0,
+        "offset": 100
+      },
+      {
+        "name": "genders",
+        "type": 14,
+        "flags": 0,
+        "offset": 108
+      },
+      {
+        "name": "icon",
+        "type": 19,
+        "flags": 0,
+        "offset": 120
+      },
+      {
+        "name": "occults",
+        "type": 14,
+        "flags": 0,
+        "offset": 136
+      },
+      {
+        "name": "refresh_sim_thumbnail",
+        "type": 0,
+        "flags": 0,
+        "offset": 144
+      },
+      {
+        "name": "species",
+        "type": 14,
+        "flags": 0,
+        "offset": 148
+      },
+      {
+        "name": "tags",
+        "type": 14,
+        "flags": 0,
+        "offset": 156
+      },
+      {
+        "name": "thumbnail_type_asm_param",
+        "type": 11,
+        "flags": 0,
+        "offset": 164
+      },
+      {
+        "name": "trait_description",
+        "type": 20,
+        "flags": 0,
+        "offset": 168
+      },
+      {
+        "name": "trait_origin_description",
+        "type": 20,
+        "flags": 0,
+        "offset": 172
+      },
+      {
+        "name": "trait_type",
+        "type": 8,
+        "flags": 0,
+        "offset": 176
+      },
+      {
+        "name": "ui_category",
+        "type": 21,
+        "flags": 0,
+        "offset": 184
+      }
+    ]
+  }
+}
