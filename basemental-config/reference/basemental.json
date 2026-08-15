@@ -1,0 +1,577 @@
+{
+  "_about": "Basemental Drugs trait ids and settings surface. READ-ONLY reference: settings live as traits on every Sim, not in a file.",
+  "counts": {
+    "menus": 23,
+    "traits": 195
+  },
+  "menus": {
+    "basemental_settings_addiction_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/addiction/settings_addiction.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_addiction"
+      ]
+    },
+    "basemental_settings_autonomy_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/autonomy/settings_autonomy.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_autonomy"
+      ]
+    },
+    "basemental_settings_beer_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_bustthedust_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_cheats_addiction_menu": {
+      "controls": [
+        "ADDERALL_ADDICTION",
+        "ALCOHOL_ADDICTION",
+        "AMPH_ADDICTION",
+        "CAFFEINE_ADDICTION",
+        "COKE_ADDICTION",
+        "KETAMINE_ADDICTION",
+        "LEAN_ADDICTION",
+        "MDMA_ADDICTION",
+        "TOBACCO_ADDICTION",
+        "WEED_ADDICTION",
+        "XANAX_ADDICTION"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_cheats_menu": {
+      "controls": [
+        "CANCER_DISABLED",
+        "DRUNKENADVENTURE_DISABLED",
+        "LIVERFAILURE_DISABLED"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_eco_current_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_eco_menu": {
+      "controls": [],
+      "module": "BasementalEcoHacks/eco_settings/settings_eco.pyc",
+      "script": "basementalecohacks.ts4script",
+      "submenus": [
+        "basemental_settings_picker_eco"
+      ]
+    },
+    "basemental_settings_legalize_gambling_menu": {
+      "controls": [
+        "LEG_GAMBLING_CHESTNUTRIDGE",
+        "LEG_GAMBLING_CITYLIFE",
+        "LEG_GAMBLING_COPPERDALE",
+        "LEG_GAMBLING_COTTAGEWORLD",
+        "LEG_GAMBLING_EVERGREEN",
+        "LEG_GAMBLING_FAMEWORLD",
+        "LEG_GAMBLING_GIBBIPOINT",
+        "LEG_GAMBLING_INNISGREEN",
+        "LEG_GAMBLING_ISLANDWORLD",
+        "LEG_GAMBLING_KOMOREBI",
+        "LEG_GAMBLING_LOVESTRUCKWORLD",
+        "LEG_GAMBLING_MAGICWORLD",
+        "LEG_GAMBLING_MAGNOLIA",
+        "LEG_GAMBLING_MOONWOODMILL",
+        "LEG_GAMBLING_MULTIUNITWORLD",
+        "LEG_GAMBLING_NEWCREST",
+        "LEG_GAMBLING_NORDHAVEN",
+        "LEG_GAMBLING_OASISSPRINGS",
+        "LEG_GAMBLING_ONDARION",
+        "LEG_GAMBLING_PETWORLD",
+        "LEG_GAMBLING_RAVENWOOD",
+        "LEG_GAMBLING_SANSEQUOIA",
+        "LEG_GAMBLING_STRANGETOWN",
+        "LEG_GAMBLING_TARTOSA",
+        "LEG_GAMBLING_VAMPWORLD",
+        "LEG_GAMBLING_WILLOWCREEK",
+        "LEG_GAMBLING_WINDENBURG"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_legalize_menu": {
+      "controls": [
+        "LEG_CHESTNUTRIDGE",
+        "LEG_CITYLIFE",
+        "LEG_COPPERDALE",
+        "LEG_COTTAGEWORLD",
+        "LEG_EVERGREEN",
+        "LEG_FAMEWORLD",
+        "LEG_GIBBIPOINT",
+        "LEG_INNISGREEN",
+        "LEG_ISLANDWORLD",
+        "LEG_KOMOREBI",
+        "LEG_LOVESTRUCKWORLD",
+        "LEG_MAGICWORLD",
+        "LEG_MAGNOLIA",
+        "LEG_MOONWOODMILL",
+        "LEG_MULTIUNITWORLD",
+        "LEG_NEWCREST",
+        "LEG_NORDHAVEN",
+        "LEG_OASISSPRINGS",
+        "LEG_ONDARION",
+        "LEG_PETWORLD",
+        "LEG_RAVENWOOD",
+        "LEG_SANSEQUOIA",
+        "LEG_STRANGETOWN",
+        "LEG_TARTOSA",
+        "LEG_VAMPWORLD",
+        "LEG_WILLOWCREEK",
+        "LEG_WINDENBURG"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_main_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_menu": {
+      "controls": [],
+      "module": "BasementalEcoHacks/eco_settings/settings_eco.pyc",
+      "script": "basementalecohacks.ts4script",
+      "submenus": [
+        "basemental_settings_picker_eco"
+      ]
+    },
+    "basemental_settings_npc_menu": {
+      "controls": [
+        "COCAINE_DEALER"
+      ],
+      "module": "Basemental/settings/menu/npc/settings_npc.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_npc"
+      ]
+    },
+    "basemental_settings_picker_addiction": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "Basemental/settings/menu/addiction/settings_addiction.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_picker_autonomy": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "Basemental/settings/menu/autonomy/settings_autonomy.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_picker_eco": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "BasementalEcoHacks/eco_settings/settings_eco.pyc",
+      "script": "basementalecohacks.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_picker_main": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "BasementalGangs/menus/simkuza.pyc",
+      "script": "basementalgangs.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_picker_milestones": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "Basemental/settings/menu/milestones/settings_milestones.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_picker_npc": {
+      "controls": [
+        "BG_DEFAULT",
+        "DEFAULT"
+      ],
+      "module": "Basemental/settings/menu/npc/settings_npc.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": []
+    },
+    "basemental_settings_police_menu": {
+      "controls": [
+        "POLICE_NOBUSTS"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_reactions_menu": {
+      "controls": [
+        "PARENTAL_ALCOHOL",
+        "PARENTAL_CANNABIS",
+        "PARENTAL_NOT_SUSCEPTIBLE",
+        "PARENTAL_OTHER",
+        "PARENTAL_PARTNERS",
+        "PARENTAL_TOBACCO"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_smokestyle_menu": {
+      "controls": [],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    },
+    "basemental_settings_sol_menu": {
+      "controls": [
+        "BSOL"
+      ],
+      "module": "Basemental/settings/menu/settings_main.pyc",
+      "script": "basementaldrugs.ts4script",
+      "submenus": [
+        "basemental_settings_picker_main"
+      ]
+    }
+  },
+  "trait_groups": {
+    "addiction": [
+      "ADDICTION_NOT_PREDISPOSED",
+      "ADDICTION_PREDISPOSED"
+    ],
+    "criminal_record": [
+      "FELONY",
+      "GET_OUT_OF_JAIL_FREECARD",
+      "HARD_FELONY",
+      "LAW_FIRM_BAD",
+      "LAW_FIRM_BEST",
+      "LAW_FIRM_MED",
+      "MISDEMEANOR",
+      "ORGANIZED_CRIME",
+      "PRISON_OG"
+    ],
+    "legalize_cannabis": [
+      "LEG_CHESTNUTRIDGE",
+      "LEG_CITYLIFE",
+      "LEG_COPPERDALE",
+      "LEG_COTTAGEWORLD",
+      "LEG_EVERGREEN",
+      "LEG_FAMEWORLD",
+      "LEG_GIBBIPOINT",
+      "LEG_INNISGREEN",
+      "LEG_ISLANDWORLD",
+      "LEG_KOMOREBI",
+      "LEG_LOVESTRUCKWORLD",
+      "LEG_MAGICWORLD",
+      "LEG_MAGNOLIA",
+      "LEG_MOONWOODMILL",
+      "LEG_MULTIUNITWORLD",
+      "LEG_NEWCREST",
+      "LEG_NORDHAVEN",
+      "LEG_OASISSPRINGS",
+      "LEG_ONDARION",
+      "LEG_PETWORLD",
+      "LEG_RAVENWOOD",
+      "LEG_SANSEQUOIA",
+      "LEG_STRANGETOWN",
+      "LEG_TARTOSA",
+      "LEG_VAMPWORLD",
+      "LEG_WILLOWCREEK",
+      "LEG_WINDENBURG"
+    ],
+    "legalize_gambling": [
+      "LEG_GAMBLING_CHESTNUTRIDGE",
+      "LEG_GAMBLING_CITYLIFE",
+      "LEG_GAMBLING_COPPERDALE",
+      "LEG_GAMBLING_COTTAGEWORLD",
+      "LEG_GAMBLING_EVERGREEN",
+      "LEG_GAMBLING_FAMEWORLD",
+      "LEG_GAMBLING_GIBBIPOINT",
+      "LEG_GAMBLING_INNISGREEN",
+      "LEG_GAMBLING_ISLANDWORLD",
+      "LEG_GAMBLING_KOMOREBI",
+      "LEG_GAMBLING_LOVESTRUCKWORLD",
+      "LEG_GAMBLING_MAGICWORLD",
+      "LEG_GAMBLING_MAGNOLIA",
+      "LEG_GAMBLING_MOONWOODMILL",
+      "LEG_GAMBLING_MULTIUNITWORLD",
+      "LEG_GAMBLING_NEWCREST",
+      "LEG_GAMBLING_NORDHAVEN",
+      "LEG_GAMBLING_OASISSPRINGS",
+      "LEG_GAMBLING_ONDARION",
+      "LEG_GAMBLING_PETWORLD",
+      "LEG_GAMBLING_RAVENWOOD",
+      "LEG_GAMBLING_SANSEQUOIA",
+      "LEG_GAMBLING_STRANGETOWN",
+      "LEG_GAMBLING_TARTOSA",
+      "LEG_GAMBLING_VAMPWORLD",
+      "LEG_GAMBLING_WILLOWCREEK",
+      "LEG_GAMBLING_WINDENBURG"
+    ],
+    "npcs": [
+      "BASEMENTAL_NPCS",
+      "NPC_BOUNCER",
+      "NPC_DEALER",
+      "NPC_POLICE",
+      "NPC_SHAMAN"
+    ],
+    "parental_reactions": [
+      "PARENTAL_ALCOHOL",
+      "PARENTAL_CANNABIS",
+      "PARENTAL_NOT_SUSCEPTIBLE",
+      "PARENTAL_OTHER",
+      "PARENTAL_PARTNERS",
+      "PARENTAL_TOBACCO"
+    ],
+    "police": [
+      "POLICE_EASY",
+      "POLICE_HARD",
+      "POLICE_NOBUSTS",
+      "POLICE_SHUTDOWN"
+    ]
+  },
+  "traits": {
+    "ACTIVE": 27419,
+    "ADDICTION_NOT_PREDISPOSED": 14370686790369317395,
+    "ADDICTION_PREDISPOSED": 17006049029644844457,
+    "ADDICTS_ANONYMOUS": 13028418831313120965,
+    "ADHD": 3872493750,
+    "ADHD_OLD": 11138663371558916737,
+    "ADULT": 34526,
+    "AGE_BUFFS_TEENS_AND_UP": 34527,
+    "ALCOHOL_HI": 17452863307754543113,
+    "ALCOHOL_LO": 17427076719920881229,
+    "AMPHETA_HI": 15181677445085756148,
+    "AMPHETA_LO": 15516074350675702518,
+    "ANGRY_INTERROGATION": 13012251104145058234,
+    "ANGRY_TOBACCO_INTERROGATION": 10246360459946412538,
+    "BASEMENTAL_NPCS": 10197189790923202564,
+    "BIGSHOT_DEALER": 13326868574062475335,
+    "BSOL": 15601528795925707043,
+    "CANCER_CURED": 14932684613244456375,
+    "CANCER_DIAGNOSED": 9955182142792478189,
+    "CANCER_DISABLED": 9984864713387330081,
+    "CANCER_D_FIRST_STAGE": 17721496558402545596,
+    "CANCER_D_SECOND_STAGE": 13316927600650510749,
+    "CANCER_D_THIRD_STAGE": 10777220936299679234,
+    "CANCER_IMMUNITY": 16258570608097713806,
+    "CANCER_U_FIRST_STAGE": 16942915117676744903,
+    "CANCER_U_SECOND_STAGE": 16943167921118185162,
+    "CANCER_U_THIRD_STAGE": 16422680940827500677,
+    "CLIENT_AMPH": 16623171429483636776,
+    "CLIENT_CELEB": 15280908185510331340,
+    "CLIENT_COKE": 13091694382981645803,
+    "CLIENT_MDMA": 17846613488718493724,
+    "CLIENT_WEED": 10230763779671045894,
+    "CLUBBER": 1405849397,
+    "CLUBBER_OLD": 16878925843728552757,
+    "COCAINE_DEALER": 8759528480332356916,
+    "COCAINE_HI": 16184248862534170775,
+    "COCAINE_LO": 17193094184656959779,
+    "COMPANION_FEMALE": 11396322758419975754,
+    "COMPANION_MALE": 11267926782845970962,
+    "DARKWEB_ACCESS": 9311664754174368358,
+    "DEALER_CUT_COLLECTED": 17772660329301819921,
+    "DEBT_COOLDOWN": 12850069830317507981,
+    "DEBT_GRACE": 11292577810599500515,
+    "DRUGSEARCH_TRAIT": 13018640533102093808,
+    "DRUGS_AMOUNT_PURCHASED": 9695510863914361890,
+    "DRUNKENADVENTURE_DISABLED": 17785182686240494650,
+    "ECO_BEER_BUFF": 9239665429795667702,
+    "ELDER": 34527,
+    "FAIRY_SENSITIVE": 12274586485516840643,
+    "FAME_RANK1": 191807,
+    "FAME_RANK2": 191819,
+    "FAME_RANK3": 191820,
+    "FAME_RANK4": 191817,
+    "FAME_RANK5": 191818,
+    "FELONY": 13247065181919946906,
+    "FRUIT_PUNCH_SABOTAGED_FOUNTAIN": 116964,
+    "GAMBLING_BUFF": 9460868781300112629,
+    "GANGS_TRAIT": 13523530775056210423,
+    "GET_OUT_OF_JAIL_FREECARD": 15558632920014132141,
+    "HARD_FELONY": 11262014351371449985,
+    "HLC_AMPHETA": 13483659073771659410,
+    "HLC_COCAINE": 18169672315540372897,
+    "HLD_AMPHETAMINE_ONE": 9350791869657027230,
+    "HLD_AMPHETAMINE_TWO": 9350791869657027229,
+    "HLD_COCAINE_ONE": 14663513089061852281,
+    "HLD_COCAINE_TWO": 14663513089061852282,
+    "IMPOSSIBLE_TRAIT": 16281918199368542851,
+    "IN_PRISON": 14686508123084997438,
+    "JUICE_BUFFS_DRUNK": 236422,
+    "JUICE_BUFFS_TIPSY": 236414,
+    "JUICE_BUFFS_WASTED": 236435,
+    "KETATOL_HI": 16154278994387516313,
+    "KETATOL_LO": 15608091151694824349,
+    "LAW_FIRM_BAD": 12380866652295448704,
+    "LAW_FIRM_BEST": 9302239586101233004,
+    "LAW_FIRM_MED": 16004026321117066826,
+    "LEANTOL_HI": 14162892364956085117,
+    "LEANTOL_LO": 15129236276984905193,
+    "LEG_CHESTNUTRIDGE": 10064365837262127719,
+    "LEG_CITYLIFE": 11873548304116318499,
+    "LEG_COPPERDALE": 13182401292585134343,
+    "LEG_COTTAGEWORLD": 11387736421585003633,
+    "LEG_EVERGREEN": 16166141135253448737,
+    "LEG_FAMEWORLD": 18085925703329606498,
+    "LEG_GAMBLING_CHESTNUTRIDGE": 11644670078226383517,
+    "LEG_GAMBLING_CITYLIFE": 18041101515507415861,
+    "LEG_GAMBLING_COPPERDALE": 18294389106731156385,
+    "LEG_GAMBLING_COTTAGEWORLD": 11872423840033527015,
+    "LEG_GAMBLING_EVERGREEN": 18141389851489659155,
+    "LEG_GAMBLING_FAMEWORLD": 10188156748722800380,
+    "LEG_GAMBLING_GIBBIPOINT": 15265304812635178823,
+    "LEG_GAMBLING_INNISGREEN": 12231854050911287600,
+    "LEG_GAMBLING_ISLANDWORLD": 9774435561429387152,
+    "LEG_GAMBLING_KOMOREBI": 15938449330186672472,
+    "LEG_GAMBLING_LOVESTRUCKWORLD": 9765867320139223268,
+    "LEG_GAMBLING_MAGICWORLD": 10457767927424559377,
+    "LEG_GAMBLING_MAGNOLIA": 18042784401722910399,
+    "LEG_GAMBLING_MOONWOODMILL": 9768078075249814290,
+    "LEG_GAMBLING_MULTIUNITWORLD": 18171393676332683593,
+    "LEG_GAMBLING_NEWCREST": 16949114356356551997,
+    "LEG_GAMBLING_NORDHAVEN": 9445338867733745589,
+    "LEG_GAMBLING_OASISSPRINGS": 16459095872940764049,
+    "LEG_GAMBLING_ONDARION": 16469332974410999824,
+    "LEG_GAMBLING_PETWORLD": 13484755474766318323,
+    "LEG_GAMBLING_RAVENWOOD": 11610350369046983017,
+    "LEG_GAMBLING_SANSEQUOIA": 13361562084736867367,
+    "LEG_GAMBLING_STRANGETOWN": 15972338343650164762,
+    "LEG_GAMBLING_TARTOSA": 17986818307793780210,
+    "LEG_GAMBLING_VAMPWORLD": 16356701955946294523,
+    "LEG_GAMBLING_WILLOWCREEK": 11893415268633965110,
+    "LEG_GAMBLING_WINDENBURG": 12628262645623343247,
+    "LEG_GIBBIPOINT": 14488932178019329317,
+    "LEG_INNISGREEN": 16251736996856223962,
+    "LEG_ISLANDWORLD": 14230324480244382242,
+    "LEG_KOMOREBI": 15538071556385043166,
+    "LEG_LOVESTRUCKWORLD": 16943687474969231070,
+    "LEG_MAGICWORLD": 12339162825142844903,
+    "LEG_MAGNOLIA": 17904940913141545029,
+    "LEG_MOONWOODMILL": 17374819506932594996,
+    "LEG_MULTIUNITWORLD": 12445582438826455267,
+    "LEG_NEWCREST": 13724121654827825563,
+    "LEG_NORDHAVEN": 15696721084953728271,
+    "LEG_OASISSPRINGS": 11194494003869513259,
+    "LEG_ONDARION": 16998632378037211718,
+    "LEG_PETWORLD": 11703391016058807513,
+    "LEG_RAVENWOOD": 17846950010314070159,
+    "LEG_SANSEQUOIA": 12415325775375938077,
+    "LEG_STRANGETOWN": 15188095987050299712,
+    "LEG_TARTOSA": 16360587917786002732,
+    "LEG_VAMPWORLD": 13376590909616586573,
+    "LEG_WILLOWCREEK": 9461311366877393708,
+    "LEG_WINDENBURG": 15593146581226670153,
+    "LIVERFAILURE_DISABLED": 10415509026254127287,
+    "MISDEMEANOR": 10817076343895148549,
+    "MOONSHINE_DEALER": 17644808279676297838,
+    "NO_AUTONOMY": 3469129753832084236,
+    "NO_GETFAMOUS": 18146455059042053537,
+    "NPC_BOUNCER": 9546260342363703982,
+    "NPC_DEALER": 10339480643024235800,
+    "NPC_POLICE": 12225601280314310709,
+    "NPC_SHAMAN": 18039815909629776645,
+    "ORGANIZED_CRIME": 10233521212310514092,
+    "PARENTAL_ALCOHOL": 10366788730209793736,
+    "PARENTAL_CANNABIS": 18276614829695402373,
+    "PARENTAL_NOT_SUSCEPTIBLE": 11618516937283070194,
+    "PARENTAL_OTHER": 16806639298334292926,
+    "PARENTAL_PARTNERS": 14816471073011775365,
+    "PARENTAL_TOBACCO": 14922661495704808211,
+    "PARTYPLANNER_NEW": 163857603,
+    "PARTYPLANNER_OLD": 12159509326236144092,
+    "PHONECALL_SUMMON": 10229257766460526290,
+    "PILLTOL_HI": 14788073464884567220,
+    "PILLTOL_LO": 13050649839622010038,
+    "POLICE_EASY": 14760334475938278211,
+    "POLICE_HARD": 8499200309481157480,
+    "POLICE_NOBUSTS": 12184237021916026157,
+    "POLICE_SHUTDOWN": 10969623586177861963,
+    "PRISON_OG": 18282715826200144644,
+    "QUIT_ADDERALL": 9636524374024991927,
+    "QUIT_ALCOHOL": 13400295711748006308,
+    "QUIT_AMPHETAMINE": 17019232157796370647,
+    "QUIT_CAFFEINE": 15715983562377135184,
+    "QUIT_COCAINE": 14979192775251928854,
+    "QUIT_KETAMINE": 12755582957670920708,
+    "QUIT_LEAN": 16442043083257542096,
+    "QUIT_MDMA": 13766786832079031803,
+    "QUIT_TOBACCO": 14226252206901484037,
+    "QUIT_WEED": 12175768669982360835,
+    "QUIT_XANAX": 9394072692472283796,
+    "RAVE_ENDTRIGGER": 13903056546646701424,
+    "ROY_HOOKUP": 11997405748328815574,
+    "SAD_INTERROGATION": 16229299249476434467,
+    "SAD_TOBACCO_INTERROGATION": 16001190374448230247,
+    "SCHOOL_TOBACCO_AUTONOMY": 18220619762912414883,
+    "SECONDHAND_IMMUNITY": 12226020399809928016,
+    "SELVADORADA_DEALER": 14363321781928508258,
+    "SMOKER_FEMININE": 14928136526303777422,
+    "SMOKER_MASCULINE": 14884071696262684714,
+    "SOCIAL_SMOKER": 15470074606764178239,
+    "SOLD_WEED_AT_SCHOOL_TRIGGER": 15601121016379650720,
+    "SOL_BUFF": 11182175474616876677,
+    "SOULSEARCHER_NEW": 3590348935,
+    "SOULSEARCHER_OLD": 12586401397637159591,
+    "SPEED_DEALER": 8022434622278476051,
+    "SRSLY_BUFF": 12417064298179817121,
+    "STEROIDS_DEALER": 10933943245729780621,
+    "STEROIDS_PERMANENT_DAMAGE": 9521442411467315683,
+    "STEROID_BUFF_ID": 9502917395693539853,
+    "STRAIGHT_EDGE": 3132837861,
+    "STRAIGHT_EDGE_OLD": 16237811618377053223,
+    "SUCCUBUS_OCCULT": 13841645514464091642,
+    "TEEN": 34524,
+    "WP_BUFF": 6493971592021321814,
+    "WW_BUFF": 1389909987661128770,
+    "Y_ADULT": 34525
+  }
+}
