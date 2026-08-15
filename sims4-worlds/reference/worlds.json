@@ -569,16 +569,17 @@
     }
   },
   "basemental_not_legalizable": [
-    "Britechester",
-    "GraniteFalls",
-    "Selvadorada",
     "Batuu",
-    "Sixam",
-    "SylvanGlade",
+    "Britechester",
+    "Clinic",
     "ForgottenGrotto",
-    "ScienceLab",
+    "Glimmerbrook_MagicRealm",
+    "GraniteFalls",
     "PoliceStation",
-    "Clinic"
+    "ScienceLab",
+    "Selvadorada",
+    "Sixam",
+    "SylvanGlade"
   ],
   "_gotchas": [
     "EVERGREEN_HARBOUR (Home Regions, British) vs EVERGREEN_HARBOR (Basemental, American) - cross-system copy-paste fails silently.",
