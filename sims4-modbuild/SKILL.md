@@ -71,7 +71,14 @@ mods do this.
 py scripts/simdata.py                    # self-test: build + reparse Trait and Buff
 py scripts/simdata.py some.simdata       # dump a real resource's structure
 py scripts/extract_ea_schema.py          # regenerate the schema after a patch
+py scripts/stbl.py --search "aristocratic"   # find game text and its key hash
+py scripts/stbl.py --key 0x43CAAED5          # resolve one key hash to its text
 ```
+
+`scripts/stbl.py` turns the game's English string table into `{key_hash: str}`,
+which is how a tuning key hash becomes readable text. It decompresses with
+RefPack, not zlib - `dbpf.read()` knows zlib only and returns EA's resources
+still compressed, with no error raised.
 
 ```python
 import dbpf, simdata
