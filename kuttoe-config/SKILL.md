@@ -84,9 +84,11 @@ py scripts/kuttoe.py rescale                          # write them
 
 Two numbers, deliberately distinct:
 
-- **`time_scale`** is *derived* — `active_days / reference_days`. At
-  custom_normal (560) against vanilla Normal (94) that is **5.96×**: a life here
-  is six times longer than any mod default assumes.
+- **`time_scale`** is *derived* — `active_days / reference_days`. Read both from
+  the profile; never hard-code the result. As an illustration, a 560-day custom
+  lifespan against vanilla Normal's 94 works out near 6×, meaning a life that
+  long makes every mod default fire roughly six times more often per lifetime
+  than its author intended.
 - **`cooldown_factor`** is *chosen* — what `rescale` actually multiplies in.
   Full `time_scale` preserves how many times a thing happens per **lifetime**;
   `1.0` preserves how often it happens per **hour of play**. Both are defensible,

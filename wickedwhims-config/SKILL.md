@@ -49,12 +49,12 @@ An empty `data` block means the profile inherits WW defaults.
 
 ```bash
 py scripts/ww.py profiles                          # lists, marking MANAGED vs yours
-py scripts/ww.py init --name wwskill_1 --from LAmour4581
+py scripts/ww.py init --name wwskill_1 --from <TheirProfile>
 py scripts/ww.py categories
 py scripts/ww.py search undress
 py scripts/ww.py get nudity.underwear_switch
 py scripts/ww.py set nudity.underwear_switch=0     # auto-targets managed profile
-py scripts/ww.py diff LAmour4581 wwskill_1
+py scripts/ww.py diff <TheirProfile> wwskill_1
 py scripts/ww.py export preset.json
 py scripts/ww.py import preset.json
 ```
