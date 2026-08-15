@@ -185,6 +185,8 @@ def cmd_set(args):
             target = [sec]
         else:
             target = [s for s in sections if key in sections[s]]
+            if not target and args.add:
+                target = [REGION_SECTION]
             if not target:
                 near = [f"{s}.{k}" for s in sections for k in sections[s]
                         if key.lower() in k.lower()][:5]
@@ -195,7 +197,17 @@ def cmd_set(args):
                          + ", ".join(f"{s}.{key}" for s in target))
         sec = target[0]
         if key not in sections[sec]:
-            sys.exit(f"{sec} has no key {key!r}")
+            # Refuse unknown keys by default. A typo would otherwise create a
+            # dead entry the mod ignores, invisible until you notice a world
+            # behaving as though it had never been configured.
+            if not args.add:
+                sys.exit(f"[{sec}] has no key {key!r}; pass --add to create it")
+            if sec == REGION_SECTION and not args.force:
+                known = {w.lower() for w in known_worlds()}
+                if known and key.lower() not in known:
+                    sys.exit(f"{key!r} is not a known world "
+                             "(--force to add it anyway)")
+            sections[sec][key] = ''
         # A regional line must name languages the mod actually knows about;
         # a typo here silently gives that world no shared language at all.
         if sec == REGION_SECTION:
@@ -243,6 +255,8 @@ def main():
     s.add_argument('--dry-run', action='store_true')
     s.add_argument('--force', action='store_true',
                    help='allow language names the base mod does not define')
+    s.add_argument('--add', action='store_true',
+                   help='create a key that does not exist yet, e.g. a new world')
     s.set_defaults(func=cmd_set)
 
     a = p.parse_args()
