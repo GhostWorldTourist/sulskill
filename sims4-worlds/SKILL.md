@@ -13,14 +13,27 @@ this one is the exception because it does not change unless a pack ships.
 
 **Identity across mods.** The same world has three names, and they do not match:
 
-| System | Willow Creek | Henford-on-Bagley | Tomarang |
+| System | Willow Creek | Henford-on-Bagley | Ciudad Enamorada |
 |---|---|---|---|
-| Home Regions code | `WILLOW_CREEK` | `HENFORD_ON_BAGLEY` | `TOMARANG` |
-| Basemental legalization | `WILLOW_CREEK` | `COTTAGE_WORLD` | `MULTIUNIT_WORLD` |
-| Config key prefix | `WillowCreek` | `HenfordOnBagley` | `Tomarang` |
+| Home Regions code | `WILLOW_CREEK` | `HENFORD_ON_BAGLEY` | `CIUDAD_ENAMORADA` |
+| Basemental **trait** | `LEG_WILLOWCREEK` | `LEG_COTTAGEWORLD` | `LEG_LOVESTRUCKWORLD` |
+| Basemental **buff** | `WILLOW_CREEK` | `COTTAGE_WORLD` | `CIUDAD_ENAMORADA` |
+| Config key prefix | `WillowCreek` | `HenfordOnBagley` | `CiudadEnamorada` |
 
-Basemental names worlds after their **pack**, not the place, so translating
-between systems by guessing fails. Look it up.
+Basemental names worlds after their **pack**, not the place — and it uses **two
+schemes that disagree with each other**. The `LEG_*` trait is always pack-named;
+the `Legalization` buff is sometimes place-named. They diverge on four worlds:
+`VAMPWORLD`/`VAMPIRE_WORLD`, `EVERGREEN`/`EVERGREEN_HARBOR`,
+`MAGNOLIA`/`MAGNOLIA_PROMENADE`, `LOVESTRUCKWORLD`/`CIUDAD_ENAMORADA`.
+
+Pack-named codes still map unambiguously, because **every pack that ships a
+world ships exactly one** — `CITYLIFE` can only be San Myshuno, `PET_WORLD` only
+Brindleton Bay. Deduction, not guesswork. But never translate by eye:
+
+- `EVERGREEN_HARBOUR` (Home Regions, British) vs `EVERGREEN_HARBOR`
+  (Basemental, American) — a silent copy-paste failure waiting to happen
+- `STRANGETOWN` is the **Sims 2** world name, used for TS4's StrangerVille
+- `LEG_GAMBLING_*` mirrors all 27, carrying the same divergences
 
 **Geography.** Positions come from the in-game map as laid out by
 **Simmatically's Immersive World Map**, which renders all worlds as one connected
