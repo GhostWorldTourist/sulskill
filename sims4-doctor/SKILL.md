@@ -81,3 +81,53 @@ flag and you would otherwise compare a state against itself.
   launch splits "mod problem" from "game problem" instantly.
 - Sort findings by whether they can break a save, not by how many there are.
   Thousands of CC texture collisions are normal; one stale tuning override is not.
+
+## Reading a BetterExceptions conflict report
+
+`tm.be.conflictscan` in game writes `BE-ConflictReport.html` under
+`Mods\...\TMEX-Settings\`. Parse it with `scripts/be_report.py`.
+
+**It is not an inventory.** On a 2,330-package library it named 114 packages and
+zero script mods - it lists only what COLLIDES. For a full mod list use MCCC's
+`GetSystemInfo` (shift-click a Sim -> Sim Commands -> Logging Commands), which
+walks the whole Mods tree and includes `.package`, `.ts4script` and `.zip`.
+
+### A collision is not a bug until you diff it
+
+The report says two mods provide the same resource. It does not say whether that
+matters. `--diff MODNAME` pulls the colliding resource out of both packages and
+shows what actually differs - that is the step that turns "a conflict was
+reported" into "here is what you lose". Three outcomes, all real:
+
+- **Identical** - harmless, whichever wins is the same file.
+- **Metadata** - differs but has no gameplay effect. Three Andirz mods each ship
+  a `SmartCoreModInfoSnippet` under the SAME instance id, so only one registers.
+  That is a bug in their framework, not something the player can fix, and it
+  changes nothing in play. `METADATA_CLASSES` in the script marks these.
+- **Divergent behaviour** - the one that costs you something. Example:
+  `z_MCM_goLater` and `HighSchool_MoreStudents` both rewrite EA's
+  `weeklySchedule_HighSchool_Active_Career` snippet (188 vs 203 lines, student
+  caps 50 vs 30, different time windows). Last loaded wins, so you get one mod's
+  schedule and silently lose the other's.
+
+### Same author does not mean safe
+
+The instinct that two mods by one creator must be coordinated is wrong often
+enough to be dangerous. `goLater` and `MoreStudents` share an author and still
+overwrite each other's work; two RVSN candy-bowl mods both ship
+`RVSN:candyBowl_GrabTreat_oct2020` at slightly different sizes. Always diff.
+
+### Severity is a heuristic, and it is blunt
+
+`TYPES` scores by resource type: StringTable and Image collisions are noise,
+tuning collisions are not. That gets the triage order roughly right and is wrong
+in individual cases - it scored the Andirz metadata snippets "high". Use it to
+sort, then diff before acting.
+
+```bash
+py scripts/be_report.py                      # all pairs, worst first
+py scripts/be_report.py --severity high
+py scripts/be_report.py --exclude taylor --exclude mariah   # hide fixed ones
+py scripts/be_report.py --diff goLater       # what do I actually lose?
+py scripts/be_report.py --mods               # every mod named, by hit count
+```
