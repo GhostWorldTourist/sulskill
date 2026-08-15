@@ -121,36 +121,68 @@ def sims_from_binary(blob):
     if len(blob) < 12:
         return []
     ver = u32(blob, 0)
-    p = 4 + (8 if ver >= 2 else 0)
-    p += 4                                          # declared size: a bound only
+    p = 4 + (8 if ver >= 2 else 0) + 4               # version [+ reserved] + size
+    size = u32(blob, p - 4)
     out = []
-    for fn, wt, v in parse(blob[p:]):
+    # Parse EXACTLY the declared payload, not to the end of the blob. The record
+    # carries a trailing byte past the declared size, and feeding that to the
+    # protobuf reader makes it read a zero key and raise 'field 0' - which looks
+    # like a corrupt record but is just an off-by-one in how you slice it.
+    try:
+        top = parse(blob[p:p + size])
+    except Exception:
+        return []
+    for fn, wt, v in top:
         if fn != 1 or wt != 2:
             continue
-        for hfn, hwt, hv in parse(v):
+        try:
+            hh = parse(v)
+        except Exception:
+            continue
+        for hfn, hwt, hv in hh:
             if hfn != 6 or hwt != 2:
                 continue
             sim = {'traits': []}
-            for sfn, swt, sv in parse(hv):
+            try:
+                sfields = parse(hv)
+            except Exception:
+                continue
+            for sfn, swt, sv in sfields:
+                # A name is stored EITHER as a literal string (5/6) OR as an
+                # STBL key (55/56) - never assume the literal path. Reading only
+                # 5/6 silently drops every Sim whose name is localized, which is
+                # most of them.
                 if sfn == 5 and swt == 2:
                     sim['first'] = sv.decode('utf-8', 'replace')
                 elif sfn == 6 and swt == 2:
                     sim['last'] = sv.decode('utf-8', 'replace')
+                elif sfn == 55 and swt == 0:
+                    sim['first_key'] = sv
+                elif sfn == 56 and swt == 0:
+                    sim['last_key'] = sv
                 elif sfn == 7 and swt == 0:
                     sim['gender'] = GENDER.get(sv, sv)
                 elif sfn == 8 and swt == 0:
                     sim['age'] = AGE.get(sv, sv)
                 elif sfn == 30 and swt == 2:
-                    for tfn, twt, tv in parse(sv):
+                    try:
+                        trackers = parse(sv)
+                    except Exception:
+                        trackers = []
+                    for tfn, twt, tv in trackers:
                         if tfn != 10 or twt != 2:
                             continue
-                        for gfn, gwt, gv in parse(tv):
+                        try:
+                            groups = parse(tv)
+                        except Exception:
+                            groups = []
+                        for gfn, gwt, gv in groups:
                             if gfn == 1 and gwt == 2:
                                 i = 0
                                 while i < len(gv):
                                     val, i = uv(gv, i)
                                     sim['traits'].append(val)
-            if sim.get('first') or sim.get('last'):
+            if sim.get('first') or sim.get('last') or sim.get('first_key') or sim.get('last_key'):
                 out.append(sim)
     return out
 
@@ -189,6 +221,13 @@ def build(root):
         sims = sims_from_binary(HB[hb_id]) if hb_id in HB else []
         for s in sims:
             s['trait_names'] = [traits.get(t, str(t)) for t in s['traits']]
+            # Resolve localized names, preferring the literal when both exist.
+            if not s.get('first') and s.get('first_key'):
+                s['first'] = strings.get(s['first_key'], '')
+            if not s.get('last') and s.get('last_key'):
+                s['last'] = strings.get(s['last_key'], '')
+            s.pop('first_key', None)
+            s.pop('last_key', None)
 
         households.append({
             'instance': f"0x{inst:X}",

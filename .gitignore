@@ -26,6 +26,9 @@ sims4-doctor/reference/
 *_inventory.json
 *_PLAN.txt
 
+# Generated premade roster - EA game text (bios), regenerate with roster.py --rebuild
+sims4-roster/reference/roster.json
+
 # Local scratch and caches
 __pycache__/
 *.pyc
