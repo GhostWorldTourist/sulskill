@@ -357,10 +357,17 @@
     ],
     "npcs": [
       "BASEMENTAL_NPCS",
+      "BIGSHOT_DEALER",
+      "COCAINE_DEALER",
+      "DEALER_CUT_COLLECTED",
+      "MOONSHINE_DEALER",
       "NPC_BOUNCER",
       "NPC_DEALER",
       "NPC_POLICE",
-      "NPC_SHAMAN"
+      "NPC_SHAMAN",
+      "SELVADORADA_DEALER",
+      "SPEED_DEALER",
+      "STEROIDS_DEALER"
     ],
     "parental_reactions": [
       "PARENTAL_ALCOHOL",

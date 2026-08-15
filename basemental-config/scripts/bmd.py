@@ -149,7 +149,7 @@ def cmd_state(args):
                 label[w.get('basemental_gambling_trait', '')] = w['display']
 
     for group in ('legalize_cannabis', 'legalize_gambling', 'police',
-                  'parental_reactions', 'criminal_record', 'addiction'):
+                  'parental_reactions', 'criminal_record', 'addiction', 'npcs'):
         members = ref['trait_groups'].get(group, [])
         on = [m for m in members if m in found]
         print(f"--- {group}  ({len(on)}/{len(members)} set) ---")
@@ -157,7 +157,7 @@ def cmd_state(args):
             print("      none")
         for m in sorted(on, key=lambda x: label.get(x, x)):
             nm = label.get(m, m)
-            print(f"      {nm:<24} {m:<26} on {found[m]} sim(s)")
+            print(f"      {nm:<24} {m:<26} x{found[m]}")
         print()
 
     if args.all:

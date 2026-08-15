@@ -94,7 +94,11 @@ def main():
             groups['police'].append(name)
         elif 'ADDICTION' in name:
             groups['addiction'].append(name)
-        elif name.startswith('NPC_') or name == 'BASEMENTAL_NPCS':
+        elif (name.startswith('NPC_') or name == 'BASEMENTAL_NPCS'
+                or 'DEALER' in name):
+            # Dealer traits do NOT share the NPC_ prefix - COCAINE_DEALER,
+            # SPEED_DEALER, BIGSHOT_DEALER and friends would be missed by a
+            # prefix rule alone.
             groups['npcs'].append(name)
         elif name in ('MISDEMEANOR', 'FELONY', 'HARD_FELONY', 'PRISON_OG',
                       'ORGANIZED_CRIME', 'GET_OUT_OF_JAIL_FREECARD',
