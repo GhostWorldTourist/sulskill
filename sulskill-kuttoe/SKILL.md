@@ -107,35 +107,58 @@ do.
 
 ```bash
 py scripts/kuttoe.py profile                          # show it
-py scripts/kuttoe.py profile --lifespan custom_long   # switch preset, re-derive time_scale
-py scripts/kuttoe.py profile --factor 3               # set the applied factor
-py scripts/kuttoe.py rescale --dry-run                # preview every time-gated setting
+py scripts/kuttoe.py profile --lifespan custom_long   # switch preset; the scale re-derives
+py scripts/kuttoe.py rescale --dry-run                # preview every scalable setting
 py scripts/kuttoe.py rescale                          # write them
+py scripts/kuttoe.py rescale --scale 3 --dry-run      # preview a what-if
 ```
 
-Two numbers, deliberately distinct:
+**The scale is derived, never stored** — `active_days / reference_days`, read
+from the profile at run time. Read both numbers; never hard-code the result.
+Switching the lifespan preset is the only action required, which is the point: a
+factor kept alongside it is one more thing to leave stale.
 
-- **`time_scale`** is *derived* — `active_days / reference_days`. Read both from
-  the profile; never hard-code the result. As an illustration, a 560-day custom
-  lifespan against vanilla Normal's 94 works out near 6×, meaning a life that
-  long makes every mod default fire roughly six times more often per lifetime
-  than its author intended.
-- **`cooldown_factor`** is *chosen* — what `rescale` actually multiplies in.
-  Full `time_scale` preserves how many times a thing happens per **lifetime**;
-  `1.0` preserves how often it happens per **hour of play**. Both are defensible,
-  so this is a decision, never a derivation. Default `1.0`.
+### Which settings move
 
-Each scalable setting is tagged in `kuttoe_descriptions.json` under `scaling`
-with its **mod-default `base`** and a `kind`:
+Not everything time-shaped does, and a single global multiplier was the previous
+design's mistake. One test decides it: **does the thing run out?**
 
-| kind | scaled? | why |
+A finite pursuit — a spellbook, a ladder, a collection — tuned to fill a vanilla
+life will finish in the first tenth of a long one and leave the rest of that life
+empty. Those scale. Everything else is the texture of play: it repeats forever,
+the author tuned how it feels in an evening, and a longer lifespan does not make
+it wrong. Scaling those only makes a trait look broken.
+
+Each setting is tagged in `kuttoe_descriptions.json` under `scaling` with its
+**mod-default `base`**, a `scale`, and a `why` in plain words:
+
+| `scale` | effect | for |
 |---|---|---|
-| `pace` | yes | interval between repeatable events (tome searches, trait triggers) |
-| `duration` | only with `--durations` | how long a state lasts; authors tuned these as player-facing cadence |
-| `rate` | never | not a time span at all (e.g. `tan_rate`) |
+| `up` | `base × scale` | finite pursuits that would otherwise be exhausted early |
+| `down` | `base ÷ scale` | rates written as a percentage of normal, where a longer life wants a *smaller* number |
+| `no` | untouched | repeats forever, or is not a time span at all |
+
+`down` is not a different intention from `up`. It is the same one written against
+an inverted encoding — the arithmetic flips, the reasoning does not.
 
 `rescale` always computes from `base`, never from the current value, so running
-it repeatedly is idempotent instead of compounding.
+it repeatedly is idempotent instead of compounding. Where a setting declares a
+`min`/`max`, a result outside it is **clamped and reported** — a range that
+cannot express the lifespan is a finding, not something to swallow silently, and
+usually means a paired setting is the real dial.
+
+### Pins beat the scale
+
+`scaling.pins` in the profile holds values chosen by hand. `rescale` writes them
+like any other value but never *computes* them — a pin is the setting, not a note
+about it. Some settings simply are a preference (two that derive identically can
+still want different values) and no factor can express that. Prefer a pin over
+inventing a knob.
+
+A pin is also how an author's deliberate ratio survives scaling. Kuttoe sets
+`tome_cooldown` and `teachspell_cooldown` 15:1 on purpose; pinning one and
+deriving the other would silently flatten that to 7:1, so both are pinned
+(`672` / `10080`) and the ratio holds.
 
 ## Units are the other trap
 

@@ -88,6 +88,7 @@ REVIEWED = os.path.join(HERE, 'reviewed.local')
 SCANCACHE = os.path.join(HERE, 'scancache.local')
 
 SEED = 4          # prefilter window; keeps a full-library scan under a second
+PREFIX_SEGS = 3   # how many '_'-separated segments can make up one handle
 _TOKEN = re.compile(r'[A-Za-z]+|\d+')
 _ALNUM = re.compile(r'[A-Za-z0-9]+')
 _state = {}
@@ -131,16 +132,40 @@ def _creator_tags(name):
     So for those terms, match only these positions. "Kiddo Bedroom Set" yields
     no candidate and passes; "Kiddo_BedroomSet" is claimed by the author and
     does not.
+
+    A handle can be more than one segment. 'Kiddo_Kid_SomeMod' claims the same
+    author as 'KiddoKid_SomeMod', so segments are accumulated across separators
+    rather than stopping at the first one - otherwise a handle escapes by being
+    spelled with an underscore in it, which is a one-character edit. The same
+    applies after 'by': 'SomeMod by Kiddo_Kid' is the same claim. Accumulation
+    stops at PREFIX_SEGS, because without a bound every prefix of a
+    separator-heavy name becomes a candidate handle.
+
+    The separator has to be '_' or '-', never a space, and that is the whole
+    reason this function exists: "Kiddo Bedroom Set" is a title, "Kiddo_Bedroom"
+    is a claim. Accepting a bare space here would re-break the case above.
     """
     base = os.path.splitext(name)[0]
     out = set()
+
+    def accumulate(segs):
+        acc = ''
+        for seg in segs[:PREFIX_SEGS]:
+            if not re.fullmatch(r'[A-Za-z0-9]{1,30}', seg):
+                break
+            acc += _norm(seg)
+            if 2 <= len(acc) <= 30:
+                out.add(acc)
+
     for m in re.findall(r'[\[\(]\s*([A-Za-z0-9 _\-]{2,30}?)\s*[\]\)]', base):
         out.add(_norm(m))
-    m = re.match(r'\s*([A-Za-z0-9]{2,30})\s*[_\-]', base)
-    if m:
-        out.add(_norm(m.group(1)))
-    for m in re.findall(r'\bby[ _\-]+([A-Za-z0-9]{2,30})', base, re.I):
-        out.add(_norm(m))
+    segs = re.split(r'[_\-]', base.strip())
+    if len(segs) > 1:
+        accumulate(segs)
+    seg = r'[A-Za-z0-9]{1,30}'
+    for m in re.findall(r'\bby[ _\-]+(%s(?:[_\-]%s){0,%d})'
+                        % (seg, seg, PREFIX_SEGS - 1), base, re.I):
+        accumulate(re.split(r'[_\-]', m))
     out.discard('')
     return out
 

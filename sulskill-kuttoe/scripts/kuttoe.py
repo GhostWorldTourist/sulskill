@@ -324,13 +324,39 @@ def cmd_set(args):
         print("\ntakes effect on next game load.")
 
 
+def time_scale(p):
+    """How much longer a life is here than the mod defaults assume.
+
+    Always derived, never stored. The whole point of the profile is that setting
+    the lifespan is the only action required - a hand-maintained factor beside it
+    is one more thing to leave stale.
+    """
+    ls = p['lifespan']
+    return ls['active_days'] / ls['reference_days']
+
+
+def rescaled(base, scale, s):
+    """Apply the derived scale in the direction the setting's encoding needs.
+
+    'down' is not a different intention from 'up' - it is the same one written
+    against a value expressed as a percentage of normal, where a longer life
+    wants a smaller number.
+    """
+    if scale == 'up':
+        val = base * s
+    elif scale == 'down':
+        val = base / s
+    else:
+        return None
+    return round(val) if isinstance(base, int) else round(val, 2)
+
+
 def cmd_profile(args):
     """Show or edit the shared save profile."""
     p = load_profile()
     if p is None:
         sys.exit(f"no profile at {PROFILE}")
     ls = p['lifespan']
-    changed = False
 
     if args.lifespan:
         if args.lifespan not in ls['presets']:
@@ -338,56 +364,92 @@ def cmd_profile(args):
                      f"known: {', '.join(ls['presets'])}")
         ls['active_preset'] = args.lifespan
         ls['active_days'] = ls['presets'][args.lifespan]
-        changed = True
-    if args.factor is not None:
-        p['scaling']['cooldown_factor'] = args.factor
-        changed = True
-    if changed:
-        # time_scale is always re-derived, never hand-maintained
-        p['scaling']['time_scale_hint'] = round(
-            ls['active_days'] / ls['reference_days'], 2)
         save_profile(p)
         print(f"updated {PROFILE}\n")
 
-    ls, sc = p['lifespan'], p['scaling']
-    print(f"lifespan   : {ls['active_preset']} = {ls['active_days']} days")
-    print(f"reference  : {ls['reference_preset']} = {ls['reference_days']} days "
+    print(f"lifespan  : {ls['active_preset']} = {ls['active_days']} days")
+    print(f"reference : {ls['reference_preset']} = {ls['reference_days']} days "
           "(what mod defaults assume)")
-    print(f"time_scale : {sc['time_scale_hint']}x  "
-          "(a life here is this much longer than mod defaults expect)")
-    print(f"cooldown_factor: {sc['cooldown_factor']}  <- what rescale actually applies")
+    print(f"scale     : {time_scale(p):.2f}x  (derived - nothing to set)")
     print(f"\npresets: " + ", ".join(f"{k}={v}" for k, v in ls['presets'].items()))
-    if sc['cooldown_factor'] == 1.0:
-        print("\nfactor is 1.0 - rescale is a no-op. Set it with: profile --factor N")
+
+    pins = p.get('scaling', {}).get('pins', {})
+    if pins:
+        print(f"\npinned by hand ({len(pins)}) - rescale will not touch these:")
+        for addr, val in sorted(pins.items()):
+            print(f"  {addr:<44} = {val}")
 
 
 def cmd_rescale(args):
-    """Recompute every time-gated setting as base * cooldown_factor.
+    """Recompute time-gated settings from the lifespan in the profile.
 
     Always from the mod default, never from the current value, so running this
-    repeatedly is idempotent rather than compounding.
+    repeatedly is idempotent rather than compounding. Whether a setting moves at
+    all is decided per setting in the reference data by one test - does the thing
+    run out? - not by a global factor applied to everything time-shaped.
     """
     sch, d = load_schema(), load_descs()
     p = load_profile()
     if p is None:
         sys.exit(f"no profile at {PROFILE}")
-    factor = args.factor if args.factor is not None else p['scaling']['cooldown_factor']
-    kinds = {'pace'} | ({'duration'} if args.durations else set())
+    s = args.scale if args.scale is not None else time_scale(p)
+    pins = p.get('scaling', {}).get('pins', {})
 
-    print(f"factor {factor}   kinds: {', '.join(sorted(kinds))}\n")
+    print(f"scale {s:.2f}x   (lifespan {p['lifespan']['active_days']}d "
+          f"vs reference {p['lifespan']['reference_days']}d)\n")
     plan = collections.defaultdict(dict)
+    held = []
+    live = {}
+
+    def current(mod, key):
+        """Read from the config file, not the schema.
+
+        The schema is a snapshot taken by the last extract, so it goes stale the
+        moment anything is `set`. A dry run that prints a stale 'now' is worse
+        than no dry run at all - and the write path already compares against the
+        file, so reading anything else here would just disagree with it.
+        """
+        if mod not in live:
+            try:
+                live[mod] = load_cfg(cfg_path(mod, sch))
+            except Exception:
+                live[mod] = {}
+        return live[mod].get(key)
+
     for addr, meta in sorted(d.get('scaling', {}).items()):
         mod, key = addr.split('.', 1)
-        if meta['kind'] not in kinds:
-            print(f"  skip  {addr:<44} ({meta['kind']})")
+        cur = current(mod, key)
+        base, how = meta['base'], meta.get('scale', 'no')
+
+        if addr in pins:
+            # A pin is a chosen value, not a note about one - so it is applied
+            # like any other, just never computed.
+            val = pins[addr]
+            plan[mod][key] = val
+            note = '' if cur == val else '  <-- change'
+            print(f"  pin  {addr:<40} {val} by hand (now {cur}){note}")
             continue
-        base = meta['base']
-        val = base * factor
-        val = round(val) if isinstance(base, int) else round(val, 2)
+        val = rescaled(base, how, s)
+        if val is None:
+            held.append((addr, 'no', meta.get('why', '')))
+            continue
+
+        lo, hi = meta.get('min'), meta.get('max')
+        clamped = None
+        if hi is not None and val > hi:
+            val, clamped = hi, f"wanted {rescaled(base, how, s)}, max is {hi}"
+        elif lo is not None and val < lo:
+            val, clamped = lo, f"wanted {rescaled(base, how, s)}, min is {lo}"
+
         plan[mod][key] = val
-        cur = sch['mods'].get(mod, {}).get('settings', {}).get(key, {}).get('current')
-        flag = '' if cur == val else '  <-- change'
-        print(f"  {addr:<44} base {base} -> {val} (now {cur}){flag}")
+        note = '' if cur == val else '  <-- change'
+        print(f"  {how:<4} {addr:<40} base {base} -> {val} (now {cur}){note}")
+        if clamped:
+            print(f"       CLAMPED: {clamped}. The range cannot express this "
+                  f"lifespan; a paired setting may be the real dial.")
+
+    for addr, why, detail in held:
+        print(f"  {'hold' if why == 'pinned' else 'keep':<4} {addr:<40} {detail}")
 
     if args.dry_run:
         print("\nDRY RUN - not written")
@@ -525,13 +587,11 @@ def main():
 
     s = sub.add_parser('profile', help='show/edit the shared save profile')
     s.add_argument('--lifespan', help='switch active preset (e.g. custom_long)')
-    s.add_argument('--factor', type=float, help='set cooldown_factor')
     s.set_defaults(func=cmd_profile)
 
     s = sub.add_parser('rescale', help='recompute time-gated settings from the profile')
-    s.add_argument('--factor', type=float, help='override the profile factor once')
-    s.add_argument('--durations', action='store_true',
-                   help='also scale duration-kind settings (off by default)')
+    s.add_argument('--scale', type=float,
+                   help='override the derived scale once, to preview a what-if')
     s.add_argument('--dry-run', action='store_true')
     s.add_argument('--force', action='store_true')
     s.set_defaults(func=cmd_rescale)

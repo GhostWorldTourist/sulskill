@@ -122,7 +122,7 @@ def blocklist(terms):
     than a hand-written digest that could agree with a broken compiler.
     """
     import blocklist_add
-    lines, bad = blocklist_add.compile_terms(terms)
+    lines, bad, _weak = blocklist_add.compile_terms(terms)
     if bad:
         raise AssertionError(f'test terms rejected by compiler: {bad}')
     fd, path = tempfile.mkstemp(suffix='.txt', text=True)

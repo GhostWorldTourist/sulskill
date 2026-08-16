@@ -2,12 +2,17 @@
 #
 #   sub:<tier>:<length>:<seed>:<digest>   substring of a normalised name
 #   tok:<tier>:<digest>                   whole normalised token
+#   auth:<tier>:<digest>                  handle in creator-tag position
+#
+# A handle that is also an ordinary word belongs in auth, never sub - as a
+# substring it matches innocent mods that merely contain the word.
 #
 # Deliberately not plaintext. This repository is public, and a readable
 # list of these mods would be a search index for them. See gate.py.
 auth:BLOCK:0d721f6f61934863
 auth:BLOCK:0e6249dfeab7e3d9
 auth:BLOCK:26af355328dbe5a6
+auth:BLOCK:626e426d5f5e1a66
 auth:BLOCK:958c979cc2470f8d
 auth:BLOCK:b62e1715ad1dfdc3
 auth:BLOCK:bb7bb06a4023c4da
@@ -31,7 +36,6 @@ sub:BLOCK:13:48ec6eb240443615:f744792d2e88c4f2
 sub:BLOCK:13:f490d308dd5bf6a9:590c66d97d333261
 sub:BLOCK:14:1a90700f6395cc11:897e2d477ebe2547
 sub:BLOCK:14:2a2724299c694b9c:c3293522321c9294
-sub:BLOCK:14:2b2a4ae59b01be91:626e426d5f5e1a66
 sub:BLOCK:14:30390e8d542db43b:65db94bca1b2942f
 sub:BLOCK:14:30820d3919507ece:79c0acb3d9a4143e
 sub:BLOCK:14:36cd4b265771c636:a12f8b6e4fb85e27

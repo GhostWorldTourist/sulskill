@@ -82,6 +82,12 @@ If a mod in the library fits one of those and is not already caught, add it:
 py _shared/blocklist_add.py terms.txt     # "<mode> <tier> <term>" per line
 ```
 
+Every term is put back through the matcher before it is kept. Read the output:
+a term reported `REJECTED` is not on the list at all, and one reported `WEAK` is
+on it but does not match the spelling it was written in. Either way the mod you
+were trying to catch may still pass. Exit status is non-zero if anything was
+rejected.
+
 Then delete `terms.txt`. It is the thing worth not keeping.
 
 ## If the gate is missing

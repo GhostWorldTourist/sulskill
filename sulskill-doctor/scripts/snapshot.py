@@ -1,7 +1,9 @@
 """Snapshot the Mods tree and diff against the previous snapshot.
 
 Persists snapshot.json so each run compares against the last, not a stale index.
-On first run it falls back to the package list in index.pkl.
+Falls back to the package list in index.pkl, and then to an empty baseline -
+with no baseline every file reads as added, which is the truthful answer and
+still leaves the script-validity check (which needs no baseline) running.
 """
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
@@ -37,13 +39,22 @@ for dp, _, fns in os.walk(ROOT):
 
 cur = {'packages': pkgs, 'scripts': scripts, 'other': other}
 
+EMPTY = {'packages': {}, 'scripts': {}, 'other': {}}
+PKL = os.path.join(gate.out_dir(), 'index.pkl')
+
 if os.path.exists(SNAP):
     prev = json.load(open(SNAP, encoding='utf-8'))
     src = 'previous snapshot'
-else:
-    old = pickle.load(open(os.path.join(gate.out_dir(), 'index.pkl'), 'rb'))
-    prev = {'packages': {k: [0, 0] for k in old}, 'scripts': {}, 'other': {}}
+elif os.path.exists(PKL):
+    old = pickle.load(open(PKL, 'rb'))
+    prev = dict(EMPTY, packages={k: [0, 0] for k in old})
     src = 'index.pkl baseline (packages only)'
+else:
+    # No baseline at all - first run here, or the output directory moved.
+    # Everything reads as added, which is honest; a traceback would also skip
+    # the script-validity check below, which does not need a baseline at all.
+    prev = EMPTY
+    src = 'nothing (no baseline yet - run again with --save to establish one)'
 
 print(f"comparing against: {src}\n")
 for kind in ('packages', 'scripts', 'other'):

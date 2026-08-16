@@ -62,7 +62,9 @@ Order of evidence:
 
 ```bash
 py scripts/deep_scan.py        # full audit -> report.json
+py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy
 py scripts/snapshot.py         # diff mods vs last run; --save updates baseline
+py scripts/variants.py         # alternatives installed side by side; stale builds
 py scripts/classify_adult.py   # bucket mods adult / adjacent / keep
 py scripts/manifest.py         # one-line description per mod; --hide-nsfw to omit
 py scripts/commands.py         # console commands each script mod registers
@@ -76,6 +78,85 @@ date, all resource TGI collisions by type, and per-script validity.
 
 `snapshot.py` only writes its baseline with `--save` — run it twice without the
 flag and you would otherwise compare a state against itself.
+
+## Variant sets — two builds of one mod, both installed
+
+Mods that offer a choice ship the choice as separate packages: `_casVer` or
+`_RewardVer`, `10min` or `25min`, `Normal` or `Rough`. Install two and they do
+not add up — they describe the same resources, so one silently overwrites the
+other and which one wins is load order. The same shape appears when an update
+lands beside the build it replaces instead of on top of it.
+
+Neither shows up as a problem anywhere else. Both packages load, nothing errors,
+and the game behaves like whichever one happened to win.
+
+```bash
+py scripts/variants.py               # -> variants.json, exit 1 if a set is found
+py scripts/variants.py --min 0.4     # widen the net (default 0.60)
+py scripts/variants.py --no-overlaps # only the sets it can actually name
+```
+
+**What decides it is the resource sets, not the names.** Two packages that are
+alternatives describe the *same* resources with different content. Two packages
+that are modules of one mod describe *different* resources. Filenames cannot
+tell those apart — `Mod_EP02` and `Mod_EP03` look exactly like `Mod_10min` and
+`Mod_25min` — so a shared name is only allowed to corroborate a shared resource
+set, never to accuse on its own. Pairs that overlap heavily with nothing tying
+them to one mod are reported separately, unjudged, because "two mods colliding"
+and "a variant set whose naming does not say so" look identical from here. That
+list is worth reading — it is where two different authors patching the same
+buff shows up.
+
+**The measure is containment, not Jaccard**, because alternatives differ by
+exactly the resource that *is* the choice being made and Jaccard charges them
+for it. Eight nanny schedules holding three resources each and agreeing on two
+score 0.50 — under any sane Jaccard floor, and invisible. What matters is the
+share of the *smaller* package the other one also describes: 0.67, reported.
+The guard that keeps that honest is size. A three-resource patch sitting wholly
+inside a five-hundred-resource mod is fully contained too, and it is an addon
+overriding a subset, not an alternative to the whole; alternatives are near
+enough the same size as each other. Below two resources a package is too small
+to accuse anything on resources alone and needs the names to agree — six files
+named `_Age_Adult`, `_Age_Elder` and so on, holding the same single resource,
+are as total an overwrite as exists.
+
+**Versions are read from the source archive first, then the filename.** Those
+disagree often, and the filename is the one that lies: a package whose name
+carries no version at all, sitting beside one named `_V1.7.3`, shipped inside
+an archive named `_V1.10` and is the *newer* of the two. Trust the filename and
+the tool recommends deleting the current build.
+That dereference needs `vortex.deployment.json`, which lives in
+`Mods\Vortex Mods\` and whose `relPath` values are relative to that folder, not
+to `Mods\`. Without it, versions fall back to filenames and say so in the output.
+
+Only builds of the *same* flavour supersede each other. Two flavours at one
+version are a live choice, not a stale build, and nothing is safe to remove.
+
+## Resource.cfg — run this before believing an inventory
+
+"The mod is installed and nothing happens" is usually this file. The game does
+not walk `Mods\`; it loads exactly what the `PackedFile` globs match, and `*`
+stops at a directory separator — which is why the file needs one rule per depth.
+A package one folder deeper than the deepest rule is present, listed by every
+tool here, and never read. Check it before theorising about conflicts:
+
+```bash
+py scripts/resource_cfg.py            # coverage + redundancy
+py scripts/resource_cfg.py --fix      # merge repeated blocks and rules
+```
+
+**Fix the redundancy without being asked.** Installers and hand-edits append
+rather than merge, so the file accumulates copies of itself; leaving that for
+the player to notice is leaving a landmine in the one file that decides what
+loads. `--fix` is safe to apply on sight because it cannot change the outcome —
+it merges equal priorities and drops repeated globs, so the set of
+(priority, glob) pairs and their order come out identical. It backs the file up
+first, and rewrites **in place** rather than replacing, so a manager-deployed
+hardlink stays linked and the staging copy is fixed with it.
+
+**Unreachable packages are reported, never fixed.** Adding a depth rule changes
+what loads, and that is the player's call — say which files are dark and let
+them choose between a deeper rule and a flatter folder.
 
 ## Console commands
 
