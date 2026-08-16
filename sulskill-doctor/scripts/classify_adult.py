@@ -27,8 +27,6 @@ def size_of(f):
     return t
 
 
-KEEP_ALWAYS = re.compile(r'Easel_Art_Catalog', re.I)
-
 CERTAIN = re.compile('|'.join([
     r'^(CE_|CRL_|CRL&|RAW_|SNOB_|GAY_|GAY&|SMASH!|PC_|MTB_|BRZ_)',
     r'^(WW_|ww_)', r'_WW_|WW$|WWAnim|StripClub',
@@ -45,56 +43,51 @@ CERTAIN = re.compile('|'.join([
     r'^DD_|oll_animations|quinsims|yummy-o-tummy|tibo131|itsalazsha|azeu',
     r'_UNZIP_ME!!!__Bazar',
     r'booty',
-    r'opend|^KIMONO|^tangtop|^office',   # 'open/closed' CAS cluster - open variants are revealing
     r'sensual|Extra_Picture_Frames',   # Sensual Studio + its art-display frames
-    r'popdress',
     r'yrsa',
-    # Known adult mods no keyword can reach: innocuous names, no telling text
-    # inside. Three rules when adding here:
-    #   - match the mod, not the author. Prolific creators ship both (Ara_ is
-    #     Ara_ExchangeActor, a WickedWhims add-on, and Ara_HighSchool, the
-    #     script half of More Class Mates).
-    #   - tolerate separators. The same mod is walked as a folder
-    #     ("Fantasy Shorts by Raxys-247-...") and as a filename
-    #     ("[Raxys]FantasyShorts.package").
-    #   - anchor single common words, or a real food or decor mod gets swept up.
-    r'Raxys|Fantasy\W*Shorts',
-    r'Cerium Bath Sponge',
-    r'ExchangeActor',
-    r'Aurora\W*Cropped',
-    r'By[+_ ]Beto',
-    r'CK[+_ ]underware',
-    r'GirlsBodyPillow',
-    r'RiggedDica|CP_ymBottom',
     r'_WP_|wicked[ _]?perversions',
-    r'khyan',
-    r'PsBOSS|Lace[ _]Panties',
-    r'gloryhole|glory[ _]hole|NNISM',
-    r'^SKRIT\b',
+    r'gloryhole|glory[ _]hole',
     r'naughty',
-    r'^(Lychee|Matcha|Tight)(\.package)?$|[\\/](Lychee|Matcha|Tight)\.package$',
-    r'Vthena|Hanzo',
+    r'necrodog',   # HD feet/body detail replacements - common enough to earn a line
 ]), re.I)
+
+# Deliberately absent: patterns that name one specific CC item rather than a
+# creator, a framework, or the vocabulary. They cannot work anywhere but the
+# library they were written against, and a list of them is a mod list, which
+# POLICY.md says does not belong in this repository.
+#
+# Adult mods with innocuous names and no telling text inside are real, and no
+# keyword will reach them. That is a limitation of this approach, not something
+# to paper over by hard-coding your own. Add yours to LOCAL below.
+#
+# LOCAL: one regex per line, no header, gitignored. Same rules as above -
+# match the mod or the creator, not a word that ordinary CC also uses; tolerate
+# separators, since the same mod is walked as a folder and as a filename; and
+# anchor single common words or a food or decor mod gets swept up.
+_local = os.path.join(os.path.dirname(HERE), 'adult_patterns.local')
+if os.path.exists(_local):
+    with open(_local, encoding='utf-8') as f:
+        _extra = [ln.strip() for ln in f if ln.strip() and not ln.startswith('#')]
+    if _extra:
+        CERTAIN = re.compile(CERTAIN.pattern + '|' + '|'.join(_extra), re.I)
 
 # animation prop/object dependencies - useless without the anims
 PROPS = re.compile(r'CC_for_animations|SupportPropsForAnimations|OBJ_Folder_for_Animations|'
                    r'Objects_required_for_some_animations', re.I)
-# matches a keyword but is genuinely just clothing / a utility
-NOT_ADULT = re.compile('|'.join([
-    r'^New Skin Overlays',
-    r"TwistedMexi's Searchable Pose Player", r'^Sports Fixes',
-    r'^Men-|^Women-',
-    r'TuningErrorNotifier',   # diagnostic tool, Nisa-compat patch only
-    r'nakedfootfountain',    # sims4me: barefoot in the fountain, not nudity
-]), re.I)
+# There is deliberately no list of exceptions here either. A named mod that
+# matches a keyword without being adult is the same mod list as the one above,
+# just on the other side of the decision, and it fails the same way: it only
+# ever describes the library it was written against.
+#
+# The cost is a false positive now and then - a barefoot mod caught by 'naked',
+# say. That is the trade this script's first line already chose: when uncertain,
+# exclude, and say so. An over-excluded mod is named in the plan where a person
+# reads it. An under-excluded one is the failure that gets noticed in front of
+# somebody else.
 ADJACENT = re.compile(r'basemental[-_ ]?(drug|gang|gambl)|^\[?e404p|\bblunt\b|hookah', re.I)
 
 adult, props, adjacent, clean = [], [], [], []
 for m in mods:
-    if KEEP_ALWAYS.search(m):
-        clean.append(m); continue
-    if NOT_ADULT.search(m):
-        clean.append(m); continue
     if PROPS.search(m):
         props.append(m); continue
     if ADJACENT.search(m) and not CERTAIN.search(m):

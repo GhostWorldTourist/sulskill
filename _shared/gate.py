@@ -108,7 +108,7 @@ def _tokens(s):
     """Normalised words at two granularities.
 
     Handles like 's4cl' and 'j69w' mix letters and digits, so splitting on that
-    boundary would make them unmatchable. Handles like 'wildGuy' need the
+    boundary would make them unmatchable. Handles like 'TwistedMexi' need the
     camelCase split. Emitting both means each kind is reachable, while a longer
     run stays one token - 's4clothing' does not contain the token 's4cl'.
     """

@@ -241,6 +241,25 @@ py scripts/commands_html.py curated/*.json --out ~/Downloads/commands.html
 (markdown) and `--include-adult` (html) control whether adult mods appear, using
 the same pattern set as `classify_adult.py`.
 
+That pattern set matches creators, frameworks, and vocabulary — things that mean
+the same on anyone's install. It deliberately holds no list of individual mods.
+An adult mod with an innocuous name and nothing telling inside it cannot be
+reached by any keyword, and hard-coding the ones from a particular library is a
+mod list, which this repository does not ship. Those mods land on the keep list,
+where `classify_adult.py` prints them under *anything that still looks
+questionable* for a person to judge — the tool says it is unsure rather than
+quietly guessing. To settle that judgement for your own install, put one regex
+per line in `sulskill-doctor/adult_patterns.local`; it is gitignored, the same
+way `_shared/reviewed.local` is, and for the same reason.
+
+`apply_plan.py` turns that exclude list into the fewest Vortex search terms that
+cover it, so a profile is a few search-and-select passes instead of hundreds of
+clicks. The terms are derived from the mod names each run, and any term that
+would also select something on the keep list is discarded — otherwise the plan
+could tell you to Ctrl+A a block with a keeper in it and show no sign it had.
+An unchanged library gives the same plan every time, so re-running it and
+diffing tells you something.
+
 ## Facts that make the analysis work
 
 - **DBPF**: header 96 bytes; entry count at 0x24, index size at 0x2C, index

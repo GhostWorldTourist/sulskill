@@ -34,6 +34,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_variants.py` | two packages that overwrite each other reported as one mod's modules, and a stale build reported as current because the filename carried an older version than the archive it shipped in. Both read as a clean library |
 | `test_snapshot.py` | a baseline written when it should not have been, which swallows the change: the next run reports +0 / -0 / ~0, and so does a library nobody touched. Also `index.pkl`'s size-less records marking the whole library as changed, and a traceback on a missing baseline taking the script-validity check with it |
 | `test_moodprint.py` | naming the wrong mod as the winner of a contested buff — a case-sensitive sort reverses the outcome for every mixed-case pair, and the report is confident either way. Also an absent `mood_weight` read as 0, and a mood id whose value is followed by an inline XML comment |
+| `test_classify_adult.py` | a mod that lands in no bucket: the counts still print, the plan still claims to cover everything, and the mod is never named — so it stays enabled in a profile built to exclude it, and the first sign is somebody seeing it in the game. Also a derived search term that selects something on the *keep* list, which tells you to Ctrl+A a block with a keeper in it and looks no different when it does |
 
 ### Written from the design, not from the code
 
@@ -47,16 +48,29 @@ Each group was checked by mutation — break the property deliberately, confirm
 that group fails and the others do not. Fourteen mutations for the groups above,
 fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
 `CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
-escaping on the first pass; fifteen for `test_snapshot.py`, all caught. If you
-add a test, do the same; a test that has never failed has not been shown to
-test anything.
+escaping on the first pass; fifteen for `test_snapshot.py`, all caught; fourteen
+for `test_classify_adult.py`, two escaping on the first pass. If you add a test,
+do the same; a test that has never failed has not been shown to test anything.
 
 Read the *set* that fails, not just whether something did. `test_snapshot.py`
 passed on its first run, which proves nothing on its own — what makes it worth
 keeping is that the narrow mutations fail narrowly: case-sensitive extension
 matching fails one test, the depth limit off by one fails one test, losing the
-`.py` fallback fails one test. A break that fails everything has told you the
-script is dead, not which property you removed.
+`.py` fallback fails one test. Broad failures are legitimate for broad
+properties — removing the empty-baseline fallback takes out nineteen tests, and
+should — but a break that fails *everything* has told you the script is dead,
+not which property you removed.
+
+**Check the harness before you believe it.** The runner for `test_snapshot.py`
+originally read the pass list out of `unittest -v` and subtracted it from the
+tests it saw. With `-v`, unittest prints `... ok` on a test's **docstring** line,
+not its name line, so every documented test read as failed and all fifteen
+mutations reported CAUGHT — including, later, mutations in files those tests
+never touch, which is what gave it away. Parse the failure list instead,
+`^(?:FAIL|ERROR): (test_\w+)`, and take non-verbose output. Both harness bugs
+found so far fail in the friendly direction: this one, and a `\r\n` comparison
+that made every mutation look caught on Windows. A mutation harness that reports
+all-caught on its first run is the thing to distrust, not the thing to file.
 
 The two escapes in that second round are the reason it is worth doing. One
 mutation changed which name `shared_stem` cut against and nothing failed — not a
@@ -82,8 +96,26 @@ basename instead of by path" mutation escaped, and again the assertion was
 right: the two packages in the fixture sorted the same way under both schemes,
 so no outcome could distinguish them. Choosing a pair where the schemes
 *disagree* — `mmm.package` at the root against `Sub/aaa.package` — made it fail
-as intended. Two of the three escapes recorded here were fixtures that could
-not tell right from wrong, which is worth knowing about how these read.
+as intended.
+
+`test_classify_adult.py` made it a fourth time, on the property that matters
+most in that file — the check that no derived search term also selects a mod on
+the keep list. Removing the check changed nothing, because the fixture's two
+excluded mods shared a long prefix and the tie-break towards longer terms was
+already avoiding the collision by accident. The colliding term has to be the
+*widest* one, or nothing forces the choice.
+
+Five of the six escapes recorded here were fixtures that could not tell right
+from wrong, which is worth knowing about how these read. The assertion is
+rarely the problem. What fails is the case it is pointed at.
+
+The sixth is its own lesson: `apply_plan.py`'s term pool was built from a set,
+so two terms tying on both coverage and length were separated by string hashing,
+and the mutation that broke widest-first selection escaped roughly one run in
+three. A test that passes at random reads exactly like a test that passes.
+**Run a mutation more than once** before recording it as caught, and if it is
+unstable, fix the nondeterminism in the subject rather than the fixture — the
+same hash order was also making the shipped plan differ between runs.
 
 Its two genuine failures on first run were both real. One was my expectation of
 load order, and the tool was right. The other was a bug: mood names were looked

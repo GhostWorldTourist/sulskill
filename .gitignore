@@ -47,3 +47,4 @@ reports/
 # installed here is not a fact about anyone else's install, so it never ships.
 _shared/reviewed.local
 _shared/scancache.local
+sulskill-doctor/adult_patterns.local

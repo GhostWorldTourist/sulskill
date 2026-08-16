@@ -164,9 +164,9 @@ def boundaries(name):
 def shared_stem(a, b):
     """Longest common prefix of two names, cut back to a token boundary in `a`.
 
-    Cutting back is what stops `KhyanTristanRoom` and `KhyanTristanScreen` from
-    claiming a stem of `KhyanTristanS`, and what keeps a shared author prefix
-    from being mistaken for a shared mod name.
+    Cutting back is what stops `LittleMsSamPetBowl` and `LittleMsSamPetBed`
+    from claiming a stem of `LittleMsSamPetB`, and what keeps a shared author
+    prefix from being mistaken for a shared mod name.
     """
     n = 0
     while n < min(len(a), len(b)) and a[n] == b[n]:
