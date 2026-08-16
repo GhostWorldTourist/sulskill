@@ -8,29 +8,42 @@
 #      publish the machine account name.
 #
 # All of it regenerates in seconds from a local install:
-#     py mccc-config/scripts/extract_schema.py
-#     py kuttoe-config/scripts/extract_kuttoe.py
+#     py sulskill-mccc/scripts/extract_schema.py
+#     py sulskill-kuttoe/scripts/extract_kuttoe.py
 # Generated files also drift out of date the moment a mod updates, so shipping
 # the extractors rather than the extracts is the correct design regardless.
-mccc-config/reference/mccc_help.json
-mccc-config/reference/mccc_schema.json
-kuttoe-config/reference/kuttoe_schema.json
+#
+# Matched by filename, not by path. These were once anchored to the skill
+# directories, and renaming those directories silently un-ignored all three -
+# leaving other people's content staged to be published by the next `git add`.
+# The filenames are distinctive; the paths were not worth the fragility.
+mccc_help.json
+mccc_schema.json
+kuttoe_schema.json
 
-# Generated reports about THIS user's library — personal, never committed.
-# adult_inventory.json is a categorised list of the user's NSFW mods by name;
-# report.json and the SFW plan enumerate their whole installed library.
-sims4-doctor/scripts/adult_inventory.json
-sims4-doctor/scripts/report.json
-sims4-doctor/scripts/SFW_PROFILE_PLAN.txt
-sims4-doctor/reference/
+# Backstop only. Generators write to gate.out_dir() (outside the checkout) and
+# the report builders require an explicit --out, so nothing below should ever
+# appear here. These patterns exist in case someone adds a tool that forgets.
+# See sulskill/POLICY.md, "What belongs in this repository".
+report.json
+sulskill-doctor/reference/
+# Console-command documents name every mod installed on one machine. The tools
+# that build them ship; the output never does.
+console-commands*.md
+console-commands*.html
 *_inventory.json
 *_PLAN.txt
 
 # Generated premade roster - EA game text (bios), regenerate with roster.py --rebuild
-sims4-roster/reference/roster.json
+roster.json
 
 # Local scratch and caches
 __pycache__/
 *.pyc
 *.bak
 reports/
+
+# Local review decisions about one machine's library. A judgement about what is
+# installed here is not a fact about anyone else's install, so it never ships.
+_shared/reviewed.local
+_shared/scancache.local
