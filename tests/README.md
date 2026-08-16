@@ -32,6 +32,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_scaling.py` | `rescale` compounding because it read the current value instead of the mod default; a pin reported but never written; a preview quoting a stale schema instead of the file it is about to overwrite |
 | `test_resource_cfg.py` | a package deeper than any `PackedFile` rule: installed, inventoried, never loaded. Also that deduplicating the file cannot change what loads — the repair is only safe to apply unasked if that holds |
 | `test_variants.py` | two packages that overwrite each other reported as one mod's modules, and a stale build reported as current because the filename carried an older version than the archive it shipped in. Both read as a clean library |
+| `test_snapshot.py` | a baseline written when it should not have been, which swallows the change: the next run reports +0 / -0 / ~0, and so does a library nobody touched. Also `index.pkl`'s size-less records marking the whole library as changed, and a traceback on a missing baseline taking the script-validity check with it |
 | `test_moodprint.py` | naming the wrong mod as the winner of a contested buff — a case-sensitive sort reverses the outcome for every mixed-case pair, and the report is confident either way. Also an absent `mood_weight` read as 0, and a mood id whose value is followed by an inline XML comment |
 
 ### Written from the design, not from the code
@@ -46,8 +47,16 @@ Each group was checked by mutation — break the property deliberately, confirm
 that group fails and the others do not. Fourteen mutations for the groups above,
 fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
 `CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
-escaping on the first pass. If you add a test, do the same; a test that has
-never failed has not been shown to test anything.
+escaping on the first pass; fifteen for `test_snapshot.py`, all caught. If you
+add a test, do the same; a test that has never failed has not been shown to
+test anything.
+
+Read the *set* that fails, not just whether something did. `test_snapshot.py`
+passed on its first run, which proves nothing on its own — what makes it worth
+keeping is that the narrow mutations fail narrowly: case-sensitive extension
+matching fails one test, the depth limit off by one fails one test, losing the
+`.py` fallback fails one test. A break that fails everything has told you the
+script is dead, not which property you removed.
 
 The two escapes in that second round are the reason it is worth doing. One
 mutation changed which name `shared_stem` cut against and nothing failed — not a

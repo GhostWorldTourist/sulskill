@@ -78,7 +78,10 @@ by 2+ mods (real conflicts), every package that overrides EA tuning with its
 date, all resource TGI collisions by type, and per-script validity.
 
 `snapshot.py` only writes its baseline with `--save` — run it twice without the
-flag and you would otherwise compare a state against itself.
+flag and you would otherwise compare a state against itself. It compares against
+the last saved snapshot, falling back to `index.pkl` and then to nothing; on
+that last one every file reads as added, which is the honest answer on a first
+run and leaves the script-validity check — which needs no baseline — running.
 
 ## Variant sets — two builds of one mod, both installed
 
