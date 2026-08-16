@@ -32,6 +32,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_scaling.py` | `rescale` compounding because it read the current value instead of the mod default; a pin reported but never written; a preview quoting a stale schema instead of the file it is about to overwrite |
 | `test_resource_cfg.py` | a package deeper than any `PackedFile` rule: installed, inventoried, never loaded. Also that deduplicating the file cannot change what loads — the repair is only safe to apply unasked if that holds |
 | `test_variants.py` | two packages that overwrite each other reported as one mod's modules, and a stale build reported as current because the filename carried an older version than the archive it shipped in. Both read as a clean library |
+| `test_moodprint.py` | naming the wrong mod as the winner of a contested buff — a case-sensitive sort reverses the outcome for every mixed-case pair, and the report is confident either way. Also an absent `mood_weight` read as 0, and a mood id whose value is followed by an inline XML comment |
 
 ### Written from the design, not from the code
 
@@ -44,8 +45,9 @@ them. **Where a test here disagrees with the code, the test is right.**
 Each group was checked by mutation — break the property deliberately, confirm
 that group fails and the others do not. Fourteen mutations for the groups above,
 fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
-`CompileTimeReachability`, all caught. If you add a test, do the same; a test
-that has never failed has not been shown to test anything.
+`CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
+escaping on the first pass. If you add a test, do the same; a test that has
+never failed has not been shown to test anything.
 
 The two escapes in that second round are the reason it is worth doing. One
 mutation changed which name `shared_stem` cut against and nothing failed — not a
@@ -65,6 +67,21 @@ property and proved nothing. Rewriting the pair so the dead token's probe name
 is caught by the live substring made the mutation fail as intended. Worth
 noticing that the escape was caused by the fixture, not the assertion — the test
 had read as obviously correct right up until something tried to break it.
+
+`test_moodprint.py` repeated the fixture lesson exactly. Its "sorted by
+basename instead of by path" mutation escaped, and again the assertion was
+right: the two packages in the fixture sorted the same way under both schemes,
+so no outcome could distinguish them. Choosing a pair where the schemes
+*disagree* — `mmm.package` at the root against `Sub/aaa.package` — made it fail
+as intended. Two of the three escapes recorded here were fixtures that could
+not tell right from wrong, which is worth knowing about how these read.
+
+Its two genuine failures on first run were both real. One was my expectation of
+load order, and the tool was right. The other was a bug: mood names were looked
+for only in packages that also held buffs, so a mod shipping its moods
+separately printed a bare id — the one thing in the report a reader can do
+nothing with. Fixing that introduced a second, caught by the same test, where
+the index was iterated twice and the second pass got an exhausted generator.
 
 Written-from-the-design earns its keep: `test_matching.py` asserted that
 `SomeMod by Handle_Name` is the same authorship claim as `SomeMod by

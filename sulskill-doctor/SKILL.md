@@ -65,6 +65,7 @@ py scripts/deep_scan.py        # full audit -> report.json
 py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy
 py scripts/snapshot.py         # diff mods vs last run; --save updates baseline
 py scripts/variants.py         # alternatives installed side by side; stale builds
+py scripts/moodprint.py        # who wins a contested buff, and what winning changed
 py scripts/classify_adult.py   # bucket mods adult / adjacent / keep
 py scripts/manifest.py         # one-line description per mod; --hide-nsfw to omit
 py scripts/commands.py         # console commands each script mod registers
@@ -131,6 +132,46 @@ to `Mods\`. Without it, versions fall back to filenames and say so in the output
 
 Only builds of the *same* flavour supersede each other. Two flavours at one
 version are a live choice, not a stale build, and nothing is safe to remove.
+
+## Emotions — who won the argument, and what it changed
+
+`variants.py` says two packages describe the same resources. `moodprint.py`
+answers the question after it: **which one the game actually reads, and what the
+winner does differently.** Buff tuning is where that matters most, because a
+buff carries the mood it pushes and the weight it pushes with, and a mod that
+overrides one takes the *whole* resource — not the field it meant to change.
+
+```bash
+py scripts/moodprint.py                 # ledger + hammers + what changed
+py scripts/moodprint.py --mood Tense    # only buffs pushing one mood
+py scripts/moodprint.py --mod chingyu   # only buffs won or lost by one mod
+py scripts/moodprint.py --limit 0       # no truncation
+```
+
+Exit 1 if any override changed anything. Four sections:
+
+- **Emotional ledger** — every *winning* buff by mood, with the mods
+  contributing most. Counting every definition instead would inflate it by
+  exactly the mods that are not running.
+- **Override hammers** — weights far above normal (≥100). While one is active
+  nothing else can outweigh it, and the mood's total stops meaning anything, so
+  those moods are annotated rather than quietly summed.
+- **Silenced** — a buff that moved an emotion and now does not, either because
+  the winner dropped `mood_type` or set the weight to 0. The moodlet still
+  appears in game, which is why this is invisible from inside it.
+- **Every buff overridden** — packages where nothing survives.
+
+**Load order is the whole answer, and it is decided by the filename.** The game
+walks `Mods` in case-insensitive path order and the *last* read of a resource
+key wins. Punctuation sorts ahead of letters, so a package named `!Addon…` is
+read **first** and therefore loses to everything after it — the opposite of what
+the `!` prefix is normally meant to do. Add-ons named that way to override their
+own base mod lose every buff in them. That is why the report names the file as
+well as the mod: the filename is the thing to change.
+
+Weight absent is reported as unstated, never as 0. A buff that states weight 0
+was deliberately silenced; one that states none was not, and collapsing them
+reports a real change as no change.
 
 ## Resource.cfg — run this before believing an inventory
 
