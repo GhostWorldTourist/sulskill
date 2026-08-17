@@ -33,6 +33,10 @@ console-commands*.md
 console-commands*.html
 *_inventory.json
 *_PLAN.txt
+# A bisect ledger is a record of one library's rounds, and the next-round file
+# names that library's mods.
+bisect_state.json
+bisect_next.txt
 
 # Generated premade roster - EA game text (bios), regenerate with roster.py --rebuild
 roster.json

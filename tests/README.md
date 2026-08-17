@@ -34,6 +34,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_variants.py` | two packages that overwrite each other reported as one mod's modules, and a stale build reported as current because the filename carried an older version than the archive it shipped in. Both read as a clean library |
 | `test_snapshot.py` | a baseline written when it should not have been, which swallows the change: the next run reports +0 / -0 / ~0, and so does a library nobody touched. Also `index.pkl`'s size-less records marking the whole library as changed, and a traceback on a missing baseline taking the script-validity check with it |
 | `test_moodprint.py` | naming the wrong mod as the winner of a contested buff — a case-sensitive sort reverses the outcome for every mixed-case pair, and the report is confident either way. Also an absent `mood_weight` read as 0, and a mood id whose value is followed by an inline XML comment |
+| `test_bisect_mods.py` | a false exoneration. Clearing the mods you just disabled because the round still failed is sound only with exactly one culprit; with two, every half fails, each round clears innocent and guilty alike, and the search narrows into a region that never held the answer. Nothing errors and the rounds keep halving. Also an exception file from a previous session scored as this round's result, and one read mid-write scored as clean |
 | `test_classify_adult.py` | a mod that lands in no bucket: the counts still print, the plan still claims to cover everything, and the mod is never named — so it stays enabled in a profile built to exclude it, and the first sign is somebody seeing it in the game. Also a derived search term that selects something on the *keep* list, which tells you to Ctrl+A a block with a keeper in it and looks no different when it does |
 
 ### Written from the design, not from the code
@@ -49,7 +50,8 @@ that group fails and the others do not. Fourteen mutations for the groups above,
 fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
 `CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
 escaping on the first pass; fifteen for `test_snapshot.py`, all caught; fourteen
-for `test_classify_adult.py`, two escaping on the first pass. If you add a test,
+for `test_classify_adult.py`, two escaping on the first pass; eighteen for
+`test_bisect_mods.py`, one escaping. If you add a test,
 do the same; a test that has never failed has not been shown to test anything.
 
 Read the *set* that fails, not just whether something did. `test_snapshot.py`
@@ -105,7 +107,16 @@ excluded mods shared a long prefix and the tie-break towards longer terms was
 already avoiding the collision by accident. The colliding term has to be the
 *widest* one, or nothing forces the choice.
 
-Five of the six escapes recorded here were fixtures that could not tell right
+`test_bisect.py` made it a fifth time, and prospectively rather than in
+hindsight. Eighteen mutations, one escape on the first pass: "a halving failure
+names a culprit" changed nothing, because the fixture disabled the entire
+candidate set, leaving no enabled candidate for a wrong implementation to name.
+Re-pointing it at a round that leaves some candidates enabled made it fail as
+intended. A second test in that file could not fail at all until it was
+rewritten — it asserted the holding directory sits outside `Mods`, but the
+fixture set that directory itself, so it would have passed with any default.
+
+Six of the seven escapes recorded here were fixtures that could not tell right
 from wrong, which is worth knowing about how these read. The assertion is
 rarely the problem. What fails is the case it is pointed at.
 

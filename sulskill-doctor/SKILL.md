@@ -1,6 +1,6 @@
 ---
 name: sulskill-doctor
-description: Diagnose The Sims 4 mod problems and audit a mod library — find conflicts, crash risks, duplicates, broken script mods, and read the game's exception logs. Use when the game crashes, hangs, misbehaves after adding mods, when a feature silently stops working, or when the user wants a health check of their mods.
+description: Diagnose The Sims 4 mod problems and audit a mod library — find conflicts, crash risks, duplicates, broken script mods, read the game's exception logs, and bisect the library when the logs name nothing. Use when the game crashes, hangs, misbehaves after adding mods, when a feature silently stops working, when the user does not know which mod is responsible, or when they want a health check of their mods.
 ---
 
 
@@ -58,9 +58,87 @@ Order of evidence:
    since a change.
 3. **The packages themselves** — `scripts/deep_scan.py`.
 
+## When the logs name nothing — bisect without fooling yourself
+
+Sometimes the evidence above names nothing: the report blames a frame every run
+produces, or there is no report at all. The library itself is then the only
+instrument left — disable some mods, launch, see what changes. That works, and
+the obvious way to do it is wrong.
+
+**Only a clean round proves anything.** A clean round proves every cause is
+inside the set you disabled. A failing round proves only that at least one cause
+is still enabled — it says nothing about what you removed. The intuitive step,
+*"I pulled that half and it still broke, so that half is innocent"*, is valid
+only when there is exactly one culprit. Two mods that each break the load on
+their own make every half you pull fail, because the other one is still there;
+you then narrow into a set that never held the whole answer and spend the rest
+of the investigation inside it. **The tell is single-mod rounds that all fail.**
+If pulling A alone fails, and pulling B alone fails, and A and B were the only
+candidates left, there was never one culprit and the narrowing that produced
+that pair was fiction.
+
+**After the first clean round, invert to add-back.** Hold the proven-clean
+configuration and add mods *back* in groups. Both outcomes are now informative,
+because everything outside the group is already known clean: a failure means a
+cause is in what you just added, a clean run clears it. Add-back costs more
+rounds per mod and finishes sooner. `scripts/bisect_mods.py` switches to it on the
+first clean round and refuses to narrow on a failing round before then.
+
+**Name a cause only by adding it back alone** to a clean base and watching that
+fail. Elimination is not naming — "it must be the one left" assumes the single
+culprit all over again. Once one is named, run the confirmation round with every
+named cause removed and everything else live: a second cause only becomes
+visible after the first is out of the way, and skipping that round is how an
+investigation ends one mod early.
+
+**Choose the symptom marker before round one, and require it to vary.** Pick the
+artifact that distinguishes a good run from a bad one, not the loudest error in
+the file. A mod whose exception appears in every run — including the clean ones —
+is not the cause however convincing the defect inside it looks, and a failing run
+with *no* such exception refutes it outright. The corollary is worth stating on
+its own: **a suspect that was enabled during a clean round is not the always-on
+cause.**
+
+**Anchor every artifact to the round.** A report written before the launch says
+nothing about the configuration now on disk; attributing one is how a round gets
+scored backwards. Check its timestamp against the game process, and use the mod
+logs at step 2 to confirm the game was even run since the change.
+
+**Score after the failing action, not after the launch.** The load that breaks
+is the one the player triggers, and the reports arrive minutes after startup. A
+file read while it is still being written reported 0, then 4, then 7 findings for
+one failed round. Wait for it to go quiet. Note also that **success can be the
+absence of a file** rather than a zero inside one.
+
+**When the candidate set is small enough to read, stop bisecting and read it.**
+This is the lesson that costs the most to learn late. Halving is for sets too
+large to inspect; at a couple of dozen mods it is usually cheaper to open the
+`.ts4script` archives and look. Mods that ship their `.py` alongside the `.pyc`
+can simply be read, and the answer is often a single shared idiom visible in
+five minutes — after an hour of launches has not produced it.
+
+**Scan `.pyc`, not just `.py`.** Most mods ship bytecode only, so a source-only
+scan silently samples a biased subset and can make a routine idiom look like a
+smoking gun. Search compiled members too (see the `zipimport` note under *Facts*
+for why source-only archives still load).
+
+### Guards as instruments
+
+When a mod's own bug takes the load down, a wrapper around the failing method
+that catches the error and **logs what it caught** is worth more than the fix.
+It answers "was this mod involved?" in one launch, where bisection needs many,
+and its log is evidence afterwards that the fault is real and how often it fires.
+
+Catch exactly one exception type, so the guard cannot mask an unrelated failure,
+and record enough to identify the tuning involved. Verify it against the real
+method first: a guard written for a classmethod that meets a staticmethod raises
+`TypeError` from inside the injection and takes down the load it was written to
+protect — a containment fix that fails open is worse than none.
+
 ## Scripts
 
 ```bash
+py scripts/bisect_mods.py      # isolate what breaks a load, without false clears
 py scripts/deep_scan.py        # full audit -> report.json
 py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy
 py scripts/snapshot.py         # diff mods vs last run; --save updates baseline
@@ -296,7 +374,9 @@ diffing tells you something.
 
 - Report **verified vs inferred** explicitly. Say which is which.
 - Prefer one decisive test over a third theory. Disabling all mods for a single
-  launch splits "mod problem" from "game problem" instantly.
+  launch splits "mod problem" from "game problem" instantly. Past that, see
+  *When the logs name nothing* — the narrowing that feels obvious there is
+  unsound, and it fails silently.
 - Sort findings by whether they can break a save, not by how many there are.
   Thousands of CC texture collisions are normal; one stale tuning override is not.
 
