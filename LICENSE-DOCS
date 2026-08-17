@@ -1,0 +1,24 @@
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+Copyright (c) 2026 GhostWorldTourist
+
+The documentation in this repository — every `.md` file, including each skill's
+SKILL.md, POLICY.md, SETUP.md, README.md and tests/README.md — is licensed under
+the Creative Commons Attribution 4.0 International License.
+
+You are free to share and adapt this material for any purpose, including
+commercially, provided you give appropriate credit, link to the license, and
+indicate if changes were made.
+
+    Attribute to: GhostWorldTourist
+    Source:       https://github.com/GhostWorldTourist/sulskill
+
+Full legal code:  https://creativecommons.org/licenses/by/4.0/legalcode
+Summary:          https://creativecommons.org/licenses/by/4.0/
+
+Everything else in this repository — all source code, including the Python under
+_shared/ and each skill's scripts/ — is licensed under the MIT License instead.
+See LICENSE.
+
+Where a file could be read as both, the file extension decides: `.md` is CC BY
+4.0, everything else is MIT.
