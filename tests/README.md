@@ -163,9 +163,3 @@ looks reachable on the strength of the live one's hit.
 What is still not provable: terms compiled **before** this existed. Retiring
 that means recompiling from the source terms file, which is the one thing this
 repository deliberately does not keep.
-
-## Known gap
-
-`caselog/` sits untracked inside the checkout and has a stray `SKILL.md.new`
-beside it. It is not wired into anything and wants either finishing or moving
-out of the working tree.
