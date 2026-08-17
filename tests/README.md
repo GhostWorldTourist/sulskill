@@ -35,6 +35,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_snapshot.py` | a baseline written when it should not have been, which swallows the change: the next run reports +0 / -0 / ~0, and so does a library nobody touched. Also `index.pkl`'s size-less records marking the whole library as changed, and a traceback on a missing baseline taking the script-validity check with it |
 | `test_moodprint.py` | naming the wrong mod as the winner of a contested buff — a case-sensitive sort reverses the outcome for every mixed-case pair, and the report is confident either way. Also an absent `mood_weight` read as 0, and a mood id whose value is followed by an inline XML comment |
 | `test_bisect_mods.py` | a false exoneration. Clearing the mods you just disabled because the round still failed is sound only with exactly one culprit; with two, every half fails, each round clears innocent and guilty alike, and the search narrows into a region that never held the answer. Nothing errors and the rounds keep halving. Also an exception file from a previous session scored as this round's result, and one read mid-write scored as clean |
+| `test_simdata.py` | a name hash computed the wrong way, which returns a plausible number and writes a resource the game never finds under the name it claims — `fnv64` shipped as FNV-1a over the original casing, wrong twice, with zero callers and a docstring inviting one. Also the format's null pointer (`0x80000000`, not `-1`) read as an ordinary offset, resolving ~2 GB below the buffer: table names decoded as fragments and schema pointers landed outside the resource, and nothing raised |
 | `test_classify_adult.py` | a mod that lands in no bucket: the counts still print, the plan still claims to cover everything, and the mod is never named — so it stays enabled in a profile built to exclude it, and the first sign is somebody seeing it in the game. Also a derived search term that selects something on the *keep* list, which tells you to Ctrl+A a block with a keeper in it and looks no different when it does |
 
 ### Written from the design, not from the code
@@ -51,7 +52,8 @@ fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
 `CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
 escaping on the first pass; fifteen for `test_snapshot.py`, all caught; fourteen
 for `test_classify_adult.py`, two escaping on the first pass; eighteen for
-`test_bisect_mods.py`, one escaping. If you add a test,
+`test_bisect_mods.py`, one escaping; eight for `test_simdata.py`, all
+caught. If you add a test,
 do the same; a test that has never failed has not been shown to test anything.
 
 Read the *set* that fails, not just whether something did. `test_snapshot.py`

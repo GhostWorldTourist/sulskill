@@ -57,11 +57,18 @@ def fnv32(s):
 
 
 def fnv64(s):
-    """64-bit tuning instance id, high bit set to mark it mod-authored."""
+    """64-bit tuning instance id, high bit set to mark it mod-authored.
+
+    FNV-1 over the lowercased name, the same rule as fnv32 and the module
+    docstring. This used to be FNV-1a over the original casing - both wrong,
+    and wrong in a way nothing catches: it returns a plausible id, the package
+    builds, and the resource is simply never found under the name it claims.
+    Measured against the base game, FNV-1a matches 0 of 20,351 EA names, while
+    FNV-1 over the lowercased name matches 28,703 of 28,703 SimData columns.
+    """
     h = 0xCBF29CE484222325
-    for b in s.encode('utf-8'):
-        h ^= b
-        h = (h * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    for b in s.lower().encode('utf-8'):
+        h = ((h * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF) ^ b
     return h | 0x8000000000000000
 
 
@@ -71,9 +78,20 @@ def load_schemas():
 
 
 # ------------------------------------------------------------------ reading
+NULL_OFFSET = -0x80000000      # 0x80000000 read signed; the format's null
+
+
 def _rel(data, pos):
+    """Resolve a self-relative pointer. None if it is null.
+
+    Two sentinels, and only -1 used to be handled. The real one is
+    0x80000000, which as a signed int is -0x80000000 - so a null pointer
+    resolved to an address about 2 GB below the buffer, and the caller got
+    whatever happened to be there. Table names came back as fragments like
+    'DATA\\x01\\x01' and schema pointers landed outside the resource.
+    """
     v = struct.unpack_from('<i', data, pos)[0]
-    return None if v == -1 else pos + v
+    return None if v in (-1, NULL_OFFSET) else pos + v
 
 
 def _cstr(data, pos):
@@ -111,11 +129,18 @@ def parse(data):
 
     tables, p = [], table_pos
     for _ in range(num_tables):
+        # The two pointers at +8 and +20 used to be skipped, which left parse()
+        # able to describe a resource but never read a value out of one: without
+        # row_pos there is nowhere to start, and without schema_pos there is no
+        # column layout to read against. Both are self-relative like every other
+        # offset here.
         tables.append({
             'name': _cstr(data, _rel(data, p)),
             'name_hash': struct.unpack_from('<I', data, p + 4)[0],
+            'schema_pos': _rel(data, p + 8),
             'data_type': struct.unpack_from('<I', data, p + 12)[0],
             'row_size': struct.unpack_from('<I', data, p + 16)[0],
+            'row_pos': _rel(data, p + 20),
             'row_count': struct.unpack_from('<I', data, p + 24)[0],
         })
         p += 28
