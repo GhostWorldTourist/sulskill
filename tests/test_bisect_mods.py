@@ -21,6 +21,12 @@ Written from the design in SKILL.md, not from the implementation:
   - An artifact older than the round says nothing about the round, and one
     still being written says nothing yet. Both must refuse to score rather than
     read as clean, because "clean" is the answer that ends the search.
+  - A round nobody played produces no artifact, and so does a game that died
+    before the first frame - too fast to write a report or to be caught by a
+    process poll. Both are byte-identical to a pass, so absence of an artifact
+    is only a pass when something else shows the game actually ran.
+  - Starting the game is the tool's job; deciding what happened is not. Arming
+    must not launch unless asked, and launching must never score.
 """
 import contextlib
 import importlib
@@ -31,6 +37,7 @@ import sys
 import tempfile
 import time
 import unittest
+import warnings
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import support                                                     # noqa: E402,F401
@@ -75,10 +82,19 @@ def rig(mods=MODS, manifest=True):
     out = os.path.join(tmp, 'out')
     hold = os.path.join(tmp, 'hold')
     os.makedirs(out, exist_ok=True)
+    # SIMS4_LAUNCH_CMD and SIMS4_GAME_DIR are pinned so that no code path -
+    # including a mutated one - can start the real game from a test run. A
+    # mutation that made arm() launch unconditionally did exactly that once,
+    # and a suite that touches the machine it runs on is not a suite.
     with support.environment(SIMS4_DIR=tmp, SULSKILL_OUT=out,
-                             SULSKILL_BISECT_HOLD=hold):
+                             SULSKILL_BISECT_HOLD=hold,
+                             SIMS4_GAME_DIR=tmp,
+                             SIMS4_LAUNCH_CMD='%s -c pass' % sys.executable), \
+            warnings.catch_warnings():
+        warnings.simplefilter('ignore', ResourceWarning)
         importlib.reload(bs)
         bs.ts4_started = lambda: None      # no game process in a test
+        bs.LAUNCH_WAIT = 0                 # never sit waiting for one either
         yield tmp, root
 
 
@@ -99,6 +115,21 @@ def poke(**kw):
     s = state()
     s.update(kw)
     bs.save(s)
+
+
+def played(tmp, age=50, name='mc_cmd_center.log'):
+    """Evidence the game actually ran: a mod log touched during the round.
+
+    Without this a round nobody launched is indistinguishable from one that
+    passed - both produce no exception file - so the fixtures have to say
+    which happened.
+    """
+    path = os.path.join(tmp, name)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('launch\n')
+    when = time.time() - age
+    os.utime(path, (when, when))
+    return path
 
 
 def report(tmp, age, name='lastException.txt'):
@@ -146,6 +177,7 @@ class CleanRoundIsTheOnlyProof(unittest.TestCase):
             run(['arm', cuts(tmp, ['alpha', 'bravo']), '--root', root])
             poke(armed_at=time.time() - 300,
                  candidates=['alpha', 'bravo', 'charlie', 'delta'])
+            played(tmp)
             code, out = run(['check'])
             self.assertEqual(code, 0)
             s = state()
@@ -156,6 +188,7 @@ class CleanRoundIsTheOnlyProof(unittest.TestCase):
         with rig() as (tmp, root):
             run(['arm', cuts(tmp, ['alpha', 'bravo']), '--root', root])
             poke(armed_at=time.time() - 300)
+            played(tmp)
             _, out = run(['check'])
             self.assertEqual(state()['mode'], 'addback')
             self.assertEqual(sorted(state()['clean_base']), ['alpha', 'bravo'])
@@ -169,6 +202,7 @@ class AddBackNarrowsBothWays(unittest.TestCase):
             # proven clean with all four out
             run(['arm', cuts(tmp, list(MODS)), '--root', root])
             poke(armed_at=time.time() - 300, candidates=list(MODS))
+            played(tmp)
             run(['check'])
             run(['restore'])
             # add alpha and bravo back; it fails
@@ -182,6 +216,7 @@ class AddBackNarrowsBothWays(unittest.TestCase):
         with rig() as (tmp, root):
             run(['arm', cuts(tmp, list(MODS)), '--root', root])
             poke(armed_at=time.time() - 300, candidates=list(MODS))
+            played(tmp)
             run(['check'])
             run(['restore'])
             run(['arm', cuts(tmp, ['bravo', 'charlie', 'delta'], 'c2.txt'),
@@ -197,6 +232,7 @@ class AddBackNarrowsBothWays(unittest.TestCase):
         with rig() as (tmp, root):
             run(['arm', cuts(tmp, list(MODS)), '--root', root])
             poke(armed_at=time.time() - 300, candidates=list(MODS))
+            played(tmp)
             run(['check'])
             run(['restore'])
             run(['arm', cuts(tmp, ['bravo', 'charlie', 'delta'], 'c2.txt'),
@@ -214,6 +250,7 @@ class ArtifactsMustBelongToTheRound(unittest.TestCase):
             report(tmp, 10_000)                    # from a previous session
             run(['arm', cuts(tmp, ['alpha']), '--root', root])
             poke(armed_at=time.time() - 300)
+            played(tmp)
             code, _ = run(['check'])
             self.assertEqual(code, 0)              # clean, not a false failure
 
@@ -241,6 +278,102 @@ class ArtifactsMustBelongToTheRound(unittest.TestCase):
         with rig() as (tmp, root):
             code, _ = run(['check'])
             self.assertEqual(code, 2)
+
+
+class ARoundNobodyPlayedIsNotAPass(unittest.TestCase):
+    """No artifact is what a passing round looks like AND what an unplayed one
+    looks like - and what a game that died before the first frame looks like,
+    since that is too fast to write a report or to be seen by a process poll.
+    Silently reading any of those as clean is a false exoneration."""
+
+    def test_no_artifact_and_no_sign_of_a_run_refuses_to_score(self):
+        with rig() as (tmp, root):
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300)
+            code, out = run(['check'])
+            self.assertEqual(code, 2)
+            self.assertIn('NO EVIDENCE', out)
+
+    def test_no_evidence_records_no_round(self):
+        with rig() as (tmp, root):
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300, candidates=list(MODS))
+            run(['check'])
+            self.assertEqual(state()['rounds'], [])
+
+    def test_no_evidence_clears_nobody(self):
+        with rig() as (tmp, root):
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300, candidates=list(MODS))
+            run(['check'])
+            self.assertEqual(state()['cleared'], [])
+
+    def test_a_running_game_with_no_report_yet_is_not_a_pass(self):
+        """While the game is still up, silence means "not answered yet", not
+        "passed". One real round read as clean 51 seconds in and produced the
+        failure at three minutes - the reports arrive when the player triggers
+        the thing, not at startup."""
+        with rig() as (tmp, root):
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300, candidates=list(MODS))
+            played(tmp)                          # it launched...
+            bs.ts4_started = lambda: time.time() - 200   # ...and is still up
+            code, out = run(['check'])
+            self.assertEqual(code, 2)
+            self.assertIn('IN PROGRESS', out)
+            self.assertEqual(state()['rounds'], [])
+            self.assertEqual(state()['cleared'], [])
+
+    def test_a_finished_run_with_no_report_is_a_pass(self):
+        """The discriminating half: same silence, but the game has exited and
+        the logs show it ran. That is the only shape that is actually clean."""
+        with rig() as (tmp, root):
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300, candidates=list(MODS))
+            played(tmp)
+            code, _ = run(['check'])
+            self.assertEqual(code, 0)
+
+    def test_a_log_written_before_the_round_is_not_evidence(self):
+        with rig() as (tmp, root):
+            played(tmp, age=10_000)            # a previous session's launch
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            poke(armed_at=time.time() - 300)
+            code, out = run(['check'])
+            self.assertEqual(code, 2)
+            self.assertIn('NO EVIDENCE', out)
+
+
+class Launching(unittest.TestCase):
+
+    def test_a_process_that_never_appears_is_reported_as_a_result(self):
+        """A crash before the first frame is a different symptom, not a tool
+        failure, so it must not read as an error the caller shrugs off."""
+        with rig() as (tmp, root):
+            with support.environment(
+                    SIMS4_LAUNCH_CMD='%s -c pass' % sys.executable), \
+                    warnings.catch_warnings():
+                # launch() detaches on purpose - it starts a game and returns
+                # rather than waiting for it - so the stand-in process outlives
+                # the call and GC reports it. Expected here, not a leak.
+                warnings.simplefilter('ignore', ResourceWarning)
+                up, why = bs.launch(wait=0)
+            self.assertFalse(up)
+            self.assertIn('result', why)
+
+    def test_arm_does_not_launch_unless_asked(self):
+        with rig() as (tmp, root):
+            calls = []
+            bs.launch = lambda *a, **k: (calls.append(1), (True, 'up'))[1]
+            run(['arm', cuts(tmp, ['alpha']), '--root', root])
+            self.assertEqual(calls, [])
+
+    def test_arm_launches_when_asked(self):
+        with rig() as (tmp, root):
+            calls = []
+            bs.launch = lambda *a, **k: (calls.append(1), (True, 'up'))[1]
+            run(['arm', cuts(tmp, ['alpha']), '--root', root, '--launch'])
+            self.assertEqual(calls, [1])
 
 
 class MovingIsReversible(unittest.TestCase):

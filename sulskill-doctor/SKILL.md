@@ -110,6 +110,34 @@ file read while it is still being written reported 0, then 4, then 7 findings fo
 one failed round. Wait for it to go quiet. Note also that **success can be the
 absence of a file** rather than a zero inside one.
 
+**"No exception file" is three different situations, and only one is a pass.**
+The round passed; or nobody played it; or the game died before the first frame,
+too fast to write a report and gone before any process poll could see it. They
+are byte-identical from outside, so silence only means *clean* when something
+else shows the game actually ran — the mod logs at step 2 answer that even after
+it has exited. And while the game is still up, silence means *not answered yet*:
+one round read as clean 51 seconds in and produced its failure at three minutes.
+`bisect_mods.py` reports these as `IN PROGRESS` and `NO EVIDENCE` rather than
+folding them into a pass.
+
+**Launch the game from the tool** — `arm --launch`. The tester's one irreducible
+job is watching the screen and saying what happened; making them go and start the
+game as well hands back a context switch every round, twenty times over. The game
+appearing *is* the instruction, which is also friendlier for anyone who does not
+want to think about any of this. Set `SIMS4_LAUNCH_CMD` to go through a
+storefront instead of the executable, so the round runs with whatever launch
+options the player actually plays with. A process that never appears is a
+*result* — a failure before the first frame is a different symptom — not a tool
+error. Starting the game is the tool's job; deciding what happened is not.
+
+**Confirm the mods you are testing are actually live.** "Installed" and "loaded"
+are different claims: a package deeper than any `PackedFile` rule never loads
+(`resource_cfg.py`), a script mod more than one folder deep or built for the
+wrong Python never runs, and a mod sitting in a manager's staging folder with no
+deploy is present in every inventory and absent from the game. A round that
+changes none of the variables it thinks it changed reads exactly like a round
+that exonerates something.
+
 **When the candidate set is small enough to read, stop bisecting and read it.**
 This is the lesson that costs the most to learn late. Halving is for sets too
 large to inspect; at a couple of dozen mods it is usually cheaper to open the

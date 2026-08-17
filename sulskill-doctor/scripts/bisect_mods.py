@@ -29,11 +29,16 @@ second name for the staging inode, so moving the Mods-side name hides the mod
 and loses nothing; restoring is a rename back. Files are MOVED, never copied - a
 copy makes a new inode and silently breaks the manager's link to staging.
 
-    py scripts/bisect.py plan cut.txt      what would move, and what did not match
-    py scripts/bisect.py arm cut.txt       move them out, stamp the round
-    py scripts/bisect.py check             score the round, print the next set
-    py scripts/bisect.py restore           move everything back
-    py scripts/bisect.py status            what is out; has the manager undone it
+    py scripts/bisect_mods.py plan cut.txt          what would move, what did not match
+    py scripts/bisect_mods.py arm cut.txt --launch  move them out and start the game
+    py scripts/bisect_mods.py check                 score the round, print the next set
+    py scripts/bisect_mods.py restore               move everything back
+    py scripts/bisect_mods.py status                what is out; has the manager undone it
+
+`--launch` is worth using every round. The tester's only irreducible job is
+watching the screen and saying what happened; making them go and start the game
+themselves hands back a context switch twenty times over. The game appearing IS
+the instruction.
 
 The manifest is not rewritten, so the manager still believes these mods are
 deployed. That is what makes arming and undoing a round instant - and it is also
@@ -68,6 +73,11 @@ HOLD = _os.environ.get('SULSKILL_BISECT_HOLD') or _os.path.join(
 # Reports are appended one at a time with pauses longer than a poll, so a file
 # read while it is still being written reports a round as cleaner than it was.
 SETTLE = 25.0
+
+# How long to wait for the game process after starting it. A module constant
+# rather than only a default argument so a test can set it to 0 and never sit
+# waiting for a game it must not start.
+LAUNCH_WAIT = 90
 
 
 def ledger_path():
@@ -168,6 +178,77 @@ def ts4_started():
         return None
 
 
+def launch(wait=None):
+    """Start the game and wait for the process. -> (pid_seen, message).
+
+    The tester has exactly one job that cannot be automated: looking at the
+    screen and saying what happened. Printing "now go and launch it" hands back
+    a context switch every round, twenty times over. Starting it here also makes
+    the anchor stricter, because the round can no longer be armed hours before
+    anybody plays it.
+
+    Set SIMS4_LAUNCH_CMD to launch through a storefront instead of the
+    executable: a storefront applies the launch options the player configured,
+    and running the exe directly tests a configuration they never play.
+
+    Never score from here. A tool that starts the game looks like a tool that
+    could also decide the outcome, and it cannot - only the person watching can.
+    """
+    import subprocess
+    wait = LAUNCH_WAIT if wait is None else wait
+    cmd = _os.environ.get('SIMS4_LAUNCH_CMD')
+    if not cmd:
+        base = ''
+        try:
+            base = gate.game_dir() or ''
+        except Exception:
+            base = ''
+        exe = os.path.join(base, 'Game', 'Bin', 'TS4_x64.exe') if base else ''
+        if not exe or not os.path.isfile(exe):
+            return False, ('cannot find the game. Set SIMS4_GAME_DIR, or '
+                           'SIMS4_LAUNCH_CMD to launch through a storefront.')
+        cmd = '"%s"' % exe
+    try:
+        subprocess.Popen(cmd, shell=True,
+                         cwd=os.path.dirname(cmd.strip('"')) or None)
+    except Exception as exc:
+        return False, 'could not start the game: %s' % exc
+
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        if ts4_started():
+            return True, 'game is up'
+        time.sleep(2)
+    # Not an error. A failure before the first frame is a different symptom
+    # from the one being bisected, and it is a result in its own right.
+    return False, ('the game process never appeared within %ds. That is a '
+                   'result, not a tool failure - a crash before the first '
+                   'frame is a different symptom.' % wait)
+
+
+def ran_since(since):
+    """Did the game run at all after `since`?
+
+    Mod logs are timestamped per launch, so they answer this even when the
+    process has already exited. Without it, a round nobody played reads exactly
+    like a round that passed - which is a false exoneration of the same family
+    the rest of this tool exists to prevent.
+    """
+    try:
+        names = os.listdir(SIMS)
+    except OSError:
+        return False
+    for name in names:
+        if not name.lower().endswith('.log'):
+            continue
+        try:
+            if os.stat(os.path.join(SIMS, name)).st_mtime >= since:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def artifacts(since, marker=None):
     """Exception files written after `since`, and whether any is still settling.
 
@@ -223,7 +304,7 @@ def cmd_plan(root, names):
     return 1 if missing else 0
 
 
-def cmd_arm(root, names):
+def cmd_arm(root, names, start_game=False):
     state = load()
     if state['moved']:
         print('%d file(s) are already out. Run restore first.'
@@ -272,7 +353,18 @@ def cmd_arm(root, names):
               % (len(missing), ', '.join(missing)))
     for rel, why in failed:
         print('   FAILED %s  %s' % (rel, why))
-    print('\nLaunch the game and perform the failing action, then: bisect.py check')
+
+    if start_game:
+        up, why = launch()
+        print('\n%s' % why)
+        if up:
+            print('ROUND IS UP - when you see the game, perform the failing '
+                  'action, then: bisect_mods.py check')
+        else:
+            print('Nothing was scored. Launch it yourself, or re-arm.')
+    else:
+        print('\nLaunch the game and perform the failing action, '
+              'then: bisect_mods.py check')
     return 1 if failed else 0
 
 
@@ -386,6 +478,32 @@ def cmd_check(marker):
               % int(SETTLE), file=sys.stderr)
         return 2
 
+    # Three situations all produce no exception file and only one is a pass.
+    # Collapsing them into "clean" is a false exoneration, the exact failure
+    # this tool exists to prevent, so each gets its own verdict.
+    if not hits:
+        if started:
+            # The game is up and has written nothing YET. One real round read
+            # as clean 51 seconds in and failed at three minutes; the reports
+            # arrive when the player triggers the thing, not at startup.
+            print('IN PROGRESS - the game is running and has written nothing '
+                  'yet.', file=sys.stderr)
+            print('That is not a pass, it is a round nobody has answered. '
+                  'Re-run after the', file=sys.stderr)
+            print('failing action, or once the game has exited.',
+                  file=sys.stderr)
+            return 2
+        if not ran_since(floor):
+            # Never played, or died before the first frame - too fast to write
+            # a report and gone before any process poll could have seen it.
+            print('NO EVIDENCE - no exception file, and nothing shows the game '
+                  'ran since', file=sys.stderr)
+            print('this round was armed. Not scored. Either it was never '
+                  'played, or it died', file=sys.stderr)
+            print('before the first frame, which is a different symptom from '
+                  'the one being bisected.', file=sys.stderr)
+            return 2
+
     disabled = sorted({i['mod'] for i in state['moved']})
     cands = set(state['candidates'])
     clean = not hits
@@ -457,6 +575,8 @@ def main(argv=None):
     ap.add_argument('--root', default=ROOT, help='the Mods folder')
     ap.add_argument('--marker', help='regex a report must match to count as the '
                                      'symptom; default is any new report')
+    ap.add_argument('--launch', action='store_true',
+                    help='start the game once the round is armed')
     a = ap.parse_args(argv)
 
     if a.action in ('plan', 'arm'):
@@ -467,7 +587,9 @@ def main(argv=None):
             print('no Mods folder at %s' % a.root, file=sys.stderr)
             return 2
         names = wanted(a.file)
-        return (cmd_plan if a.action == 'plan' else cmd_arm)(a.root, names)
+        if a.action == 'plan':
+            return cmd_plan(a.root, names)
+        return cmd_arm(a.root, names, a.launch)
     if a.action == 'check':
         return cmd_check(a.marker)
     if a.action == 'restore':
