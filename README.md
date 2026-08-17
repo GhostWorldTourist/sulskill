@@ -63,9 +63,9 @@ It cannot make complex mods for you. Learn to make mods if you're interested in 
 
 So an adult mod with an innocuous name and nothing telling inside it will not always be caught. It lands on the keep list, where the tool prints it under *anything that still looks questionable* for you to judge. It reports being unsure rather than quietly guessing. **Expect to add your own patterns.** One regex per line in `sulskill-doctor/adult_patterns.local`, which is gitignored (or ask your agent to help you add mods to that list).
 
-## Disallowed mods and environemnts
+## Disallowed mods and environments
 
-**One category of mods are refused.** Mods built around sexual abuse: child sexualisation, bestiality, and rape, and the frameworks and add-ons built to plug into them. If the gate finds those, no script here runs at all, on any part of the library. That check is not configurable and not negotiable, and asking an assistant to remove it will cause the agent to decline. Note OpenAI and Anthropic both have strict policies on top of that preventing their agents from assisting with this kind of disgusting content.
+**One category of mod is refused.** Mods built around sexual abuse: child sexualisation, bestiality, and rape, and the frameworks and add-ons built to plug into them. If the gate finds those, no script here runs at all, on any part of the library. That check is not configurable and not negotiable, and asking an assistant to remove it will cause the agent to decline. Note OpenAI and Anthropic both have strict policies on top of that preventing their agents from assisting with this kind of disgusting content.
 
 The list of prohibited mods and authors is built from Deaderpool's list as published in the MCCC Discord. It is not mine and I did not curate it. It ships as `_shared/blocklist.txt` in digest form because this repository is public.
 
