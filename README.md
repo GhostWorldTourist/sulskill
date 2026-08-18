@@ -23,6 +23,33 @@ You usually do not need to name one. Describe the problem and the right skill lo
 
 This works with a mod manager or without one. Mods dragged by hand into `Documents/Electronic Arts/The Sims 4/Mods` are as well supported as a managed deployment. The live Mods folder is what gets read either way. Vortex's staging folder is additionally recognised by name, so mods are reported under the names Vortex shows you; point `VORTEX_TS4_MODS` at another manager's staging folder to get the same (or ask your agent to do that). Nothing here requires a manager.
 
+## It knows what vanilla is
+
+Most mod tools compare mods to each other. These were built against a full read
+of the base game — every package, every resource, the tuning, the string tables
+and the game's own compiled Python — so that "this mod overrides something" can
+be followed by *what* it overrides and what that thing normally does.
+
+That read produced **541,456 tuning instances across 154 types**, from roughly
+1,300 packages and 4.85 million resource entries, with zero parse failures. It is
+what lets a tool tell an override from new content, name the EA tuning a mod is
+sitting on top of, and say whether a collision matters.
+
+It also settles questions that otherwise get answered by guessing: that the game
+mounts two separate resource trees, so the same key in both is not a conflict;
+that mods load at priority 500 and beat every game resource; that a name hash is
+FNV-1 over the lowercased name and nothing else; that 546 vanilla buffs move a
+Sim's mood with no display name, so "nothing is showing but the mood is wrong"
+has a vanilla explanation before it has a mod one.
+
+The findings are in [BASEGAME.md](sulskill/BASEGAME.md), including the trap that
+cost the most: only three of 276 combined-tuning resources are readable XML, and
+sampling those produces confident wrong answers about the other 273.
+
+**The index itself is not in this repository.** It is hundreds of megabytes
+derived from your own game files, which makes it an output, and outputs do not
+ship here. What ships is what was learned from it.
+
 ## Install
 
 Ask your agent to help if you've never cloned a repository before. Clone the repository, then link each skill into your Claude skills directory. **Link, don't copy** — the skills reach back into `_shared/` in the checkout for the refusal gate and the package readers, and a copied folder cannot find them.
@@ -81,7 +108,7 @@ Tools, and nothing else. No mod lists, no manifests, no conflict reports, no adu
 py tests/run.py
 ```
 
-239 tests, standard library only, about ten seconds. They build synthetic mod installs in a temp directory, so they never touch your real library.
+278 tests, standard library only, about twelve seconds. They build synthetic mod installs in a temp directory, so they never touch your real library.
 
 Every test here covers a **quiet** failure: one where the wrong answer and the right answer look identical from outside. A term that matches nothing, a package the reader could not open, a mod folder it never looked in: none of them raise, and all of them look exactly like a clean library. Most of the bugs they cover shipped first and were found by accident. See [tests/README.md](tests/README.md), which also records the mutation testing and the times the tests were the thing that was wrong.
 

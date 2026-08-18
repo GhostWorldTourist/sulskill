@@ -21,6 +21,12 @@ one loads on its own. This page is for when you want to see what exists.
 
 Start here when something is *wrong* and you do not yet know why.
 
+**Reference on the base game itself** — format rules, load-order and hashing
+facts, and the baselines a claim about a mod should be read against — is in
+[BASEGAME.md](BASEGAME.md). Read it before concluding that two resources
+conflict, that a hash does not match, or that a value read out of SimData is
+what it appears to be.
+
 ## Configuring a specific mod
 
 | part | for |

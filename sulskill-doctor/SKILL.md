@@ -52,11 +52,17 @@ Order of evidence:
      failure leaves `lastException` clean, so "no exceptions" is not health.
    - The game archives these as `lastException_<timestamp>.txt` on next launch,
      so an un-suffixed file means "thrown during the most recent session".
-2. **Mod logs** (`mc_cmd_center.log`, `Andirz_SmartCoreScript.log`,
+2. **`mc_lastexception.html`**, written by MC Command Center into the Mods
+   folder. **Read this before bisecting anything.** It dumps the failing frame
+   *with its local variables and arguments*, where `lastException.txt` often
+   carries only the downstream wreckage. In one real investigation it named the
+   offending mod and the exact `TypeError` twenty-one times, in plain text,
+   while twenty-five bisect rounds were spent narrowing towards it.
+3. **Mod logs** (`mc_cmd_center.log`, `Andirz_SmartCoreScript.log`,
    `lot51_core.log`, `WickedWhimsInfoLog.log`, Basemental, MoreStudents). They
    timestamp each launch — use them to tell whether the game has even been run
    since a change.
-3. **The packages themselves** — `scripts/deep_scan.py`.
+4. **The packages themselves** — `scripts/deep_scan.py`.
 
 ## When the logs name nothing — bisect without fooling yourself
 
@@ -102,7 +108,7 @@ cause.**
 **Anchor every artifact to the round.** A report written before the launch says
 nothing about the configuration now on disk; attributing one is how a round gets
 scored backwards. Check its timestamp against the game process, and use the mod
-logs at step 2 to confirm the game was even run since the change.
+logs at step 3 to confirm the game was even run since the change.
 
 **Score after the failing action, not after the launch.** The load that breaks
 is the one the player triggers, and the reports arrive minutes after startup. A
@@ -114,7 +120,7 @@ absence of a file** rather than a zero inside one.
 The round passed; or nobody played it; or the game died before the first frame,
 too fast to write a report and gone before any process poll could see it. They
 are byte-identical from outside, so silence only means *clean* when something
-else shows the game actually ran — the mod logs at step 2 answer that even after
+else shows the game actually ran — the mod logs at step 3 answer that even after
 it has exited. And while the game is still up, silence means *not answered yet*:
 one round read as clean 51 seconds in and produced its failure at three minutes.
 `bisect_mods.py` reports these as `IN PROGRESS` and `NO EVIDENCE` rather than
@@ -391,6 +397,29 @@ diffing tells you something.
   not organised per panel. To tell a compat build from a plain one, diff the
   ASCII symbols: a merged build retains the other mod's symbols (0–1 missing),
   an unmerged one drops several.
+- **A stale injector wrapper takes down the whole tuning load, and the error
+  names it.** `InstanceManager.load_data_into_class_instances(self,
+  packs_to_load=None)` gained its second parameter; mods generated before that
+  declare their wrapper as `(original, self)` and are handed three positionals
+  through the usual `_inject(*args)` shim. The result is
+  `TypeError: <name>() takes 2 positional arguments but 3 were given`, raised at
+  `instance_manager.py:251` — which is **not inside any try/except**. It escapes,
+  the service manager logs "Error during initialization of service" and
+  **abandons the tuning service**, and the game loads a zone with tuning
+  half-applied. Every manager registered after the failure point never loads and
+  no `_tuning_loaded_callback` runs for anyone.
+
+  The visible result is not "a mod feature is missing". It is
+  `venue_residential` without `sub_venue_types`, a fish bowl with no
+  `inventory_component`, a default posture of `None`, and households that will
+  not load — none of which mention the mod at fault.
+
+  **This is checkable without a bisect.** Scan `.ts4script` archives for
+  functions installed onto that method and count their parameters: two is the
+  bug, `*args`/`**kwargs` or an explicit `packs_to_load` is fine. The fix is to
+  update the mod. On a 1,300-mod library, sixteen mods wrapped the method and
+  only the stale ones were fatal — so "many mods do this" is not a reason to
+  suspect any of them.
 - **Injector chains are a real crash class.** Many mods wrap
   `load_data_into_class_instances`. An old mod whose injected function has a
   fixed signature dies when a newer mod passes `*args` — the error names the
