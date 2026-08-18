@@ -45,6 +45,11 @@ Failures here are usually **silent** — an empty picker, a config in the wrong
 folder, a modal with no content. Guessing produces confident wrong answers.
 Order of evidence:
 
+0. **`scripts/evidence.py` first.** It enumerates every diagnostic artifact on
+   the install rather than looking for the ones anybody remembers, ranks them by
+   what they are worth, and prints the files it *cannot* identify loudest —
+   because that is the one holding the answer. The list below is what it
+   recognises, not the limit of what is there.
 1. **Exception files** in `Documents\Electronic Arts\The Sims 4\`:
    - `lastException.txt` — Python/gameplay. With Better Exceptions installed it
      names the offending mod and reports `TuningLoadFinished`.
@@ -172,6 +177,7 @@ protect — a containment fix that fails open is worse than none.
 ## Scripts
 
 ```bash
+py scripts/evidence.py         # every diagnostic artifact, worth-reading first
 py scripts/bisect_mods.py      # isolate what breaks a load, without false clears
 py scripts/deep_scan.py        # full audit -> report.json
 py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy
