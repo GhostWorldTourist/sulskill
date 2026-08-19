@@ -17,6 +17,7 @@ They read your library directly. Not the filenames, the actual DBPF contents: wh
 | **sulskill-languages** | frankk's Language Barriers — which world speaks what |
 | **sulskill-worlds** | every world: map position, neighbours, pack, and what each mod calls it |
 | **sulskill-roster** | the premade Sims and households the game ships with |
+| **sulskill-basegame** | build and query a full index of the base game — what an instance id is, whether a mod overrides EA tuning or invents its own, what a buff shows the player |
 | **sulskill-modbuild** | authoring `.package` files, SimData resources, tuning instance ids |
 
 You usually do not need to name one. Describe the problem and the right skill loads on its own.
@@ -46,9 +47,19 @@ The findings are in [BASEGAME.md](sulskill/BASEGAME.md), including the trap that
 cost the most: only three of 276 combined-tuning resources are readable XML, and
 sampling those produces confident wrong answers about the other 273.
 
-**The index itself is not in this repository.** It is hundreds of megabytes
-derived from your own game files, which makes it an output, and outputs do not
-ship here. What ships is what was learned from it.
+**The tools that build it are here; the index itself is not.** `sulskill-basegame`
+reads your installed game and builds the index locally:
+
+```bash
+py scripts/index.py     # build it
+py scripts/q.py id 14965
+```
+
+Every stage is deterministic Python — no network, no model, nothing to install.
+It costs CPU minutes, once. The finished index is hundreds of megabytes derived
+from your own game files, which makes it an output, and outputs do not ship
+here. It also differs with which packs you own, so a committed copy would
+under-report for most people while looking authoritative.
 
 ## Install
 
@@ -108,7 +119,7 @@ Tools, and nothing else. No mod lists, no manifests, no conflict reports, no adu
 py tests/run.py
 ```
 
-278 tests, standard library only, about twelve seconds. They build synthetic mod installs in a temp directory, so they never touch your real library.
+307 tests, standard library only, about twelve seconds. They build synthetic mod installs in a temp directory, so they never touch your real library.
 
 Every test here covers a **quiet** failure: one where the wrong answer and the right answer look identical from outside. A term that matches nothing, a package the reader could not open, a mod folder it never looked in: none of them raise, and all of them look exactly like a clean library. Most of the bugs they cover shipped first and were found by accident. See [tests/README.md](tests/README.md), which also records the mutation testing and the times the tests were the thing that was wrong.
 

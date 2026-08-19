@@ -5,7 +5,7 @@ description: The front door to the sulskill family of Sims 4 skills - what each 
 
 # sulskill
 
-Nine skills for modding The Sims 4. They are separate so that only the relevant
+Ten skills for modding The Sims 4. They are separate so that only the relevant
 one loads — an answer about world geography should not be reasoning through
 WickedWhims settings — but they share one refusal policy, one setup, and one
 house style.
@@ -20,6 +20,8 @@ one loads on its own. This page is for when you want to see what exists.
 | **sulskill-doctor** | the game crashes, hangs, or a feature silently stops working; finding conflicts, duplicates, broken script mods; reading exception logs; describing what every installed mod does |
 
 Start here when something is *wrong* and you do not yet know why.
+
+| **sulskill-basegame** | build and query a full index of the base game: what an instance id is, whether a mod overrides EA tuning or invents its own, which pack shipped something, the signature of a game method |
 
 **Reference on the base game itself** — format rules, load-order and hashing
 facts, and the baselines a claim about a mod should be read against — is in

@@ -75,7 +75,8 @@ BLOCKLIST = os.path.join(HERE, 'blocklist.txt')
 
 # Every skill ships a shim that loads this module. If one goes missing, someone
 # has been editing, and the gate says so rather than trusting what is left.
-SKILLS = ('sulskill-basemental', 'sulskill-kuttoe', 'sulskill-languages',
+SKILLS = ('sulskill-basegame', 'sulskill-basemental', 'sulskill-kuttoe',
+          'sulskill-languages',
           'sulskill-mccc', 'sulskill-doctor', 'sulskill-modbuild', 'sulskill-roster',
           'sulskill-wickedwhims')
 
