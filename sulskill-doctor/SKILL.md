@@ -185,6 +185,8 @@ py scripts/snapshot.py         # diff mods vs last run; --save updates baseline
 py scripts/variants.py         # alternatives installed side by side; stale builds
 py scripts/moodprint.py        # who wins a contested buff, and what winning changed
 py scripts/classify_adult.py   # bucket mods adult / adjacent / keep
+py scripts/apply_plan.py       # that exclude list -> the fewest Vortex search terms
+py scripts/scarlet.py          # cross-reference a Scarlet's Mod List export with disk
 py scripts/manifest.py         # one-line description per mod; --hide-nsfw to omit
 py scripts/commands.py         # console commands each script mod registers
 py scripts/commands_doc.py     # curated JSON -> a markdown doc (--out required)
@@ -355,6 +357,14 @@ py scripts/commands_doc.py  curated/*.json --out ~/Downloads/commands.md
 py scripts/commands_html.py curated/*.json --out ~/Downloads/commands.html
 ```
 
+Both HTML builders, and `manifest.py --html`, draw their look from
+`scripts/report_style.py` — one stylesheet imported by every report, so they
+stay a set rather than drifting into near-misses of each other. It is a
+module, not a command: each report supplies its own body and its own filter
+logic, and everything above that — tokens, the sticky command bar, search,
+chips, cards, rows — comes from there. Change it and every report changes
+with it.
+
 `--out` is required on both and must point outside the repository. `--adult-out`
 (markdown) and `--include-adult` (html) control whether adult mods appear, using
 the same pattern set as `classify_adult.py`.
@@ -377,6 +387,33 @@ would also select something on the keep list is discarded — otherwise the plan
 could tell you to Ctrl+A a block with a keeper in it and show no sign it had.
 An unchanged library gives the same plan every time, so re-running it and
 diffing tells you something.
+
+## Scarlet's Mod List — what the export does and does not tell you
+
+Scarlet maintains a community list of Sims 4 mods and their patch status, and
+her site exports a "Your Mods" CSV of whatever you have ticked:
+
+```bash
+py scripts/scarlet.py ~/Downloads/your-mods.csv
+py scripts/scarlet.py export.csv --missing      # tracked but not on disk
+py scripts/scarlet.py export.csv --creators     # summarise by creator
+py scripts/scarlet.py export.csv --unselected   # include Selected=FALSE rows
+```
+
+**The export contains no broken/updated status.** Its columns are
+`Selected, ID, Mod Name, Creator` — it is your *selection*, not a health
+verdict, and the status lives on her site. So do not present this as "these mods
+are broken". The value is the **join**: which tracked mods are missing from
+disk, and which installed mods nobody is tracking.
+
+**Matching is fuzzy and says so.** Mod names are prose — "Add vanity function to
+all desks!" — and filenames are not. Both sides are normalised to alphanumerics
+and tested for containment in either direction, with a creator hint. Heavily
+abbreviated filenames will miss. Unmatched entries are **reported rather than
+dropped**, because a silent drop reads exactly like a mod you do not have.
+
+The CSV is the user's own copy of someone else's work. Pass a path; nothing from
+it is ever vendored into this repository.
 
 ## Facts that make the analysis work
 
