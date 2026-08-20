@@ -53,10 +53,12 @@ import struct
 
 import dbpf_index
 
-# The readers live in the checkout, next to the gate that this tree already
-# located. Importing them from there keeps one copy of the format knowledge.
+# The readers live in the checkout, so derive its root from this file rather
+# than from the gate shim's private module name. That name only exists when
+# the shim did the loading; anything importing _shared/gate.py directly - the
+# test support module does - leaves it absent and this raised KeyError.
 _REPO = _os.path.dirname(_os.path.dirname(
-    _sys.modules['_sulskill_gate'].__file__))
+    _os.path.dirname(_os.path.abspath(__file__))))
 _SCRIPTS = _os.path.join(_REPO, 'sulskill-modbuild', 'scripts')
 if _SCRIPTS not in _sys.path:
     _sys.path.insert(0, _SCRIPTS)
