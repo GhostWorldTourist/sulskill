@@ -26,6 +26,7 @@ Nothing here reads the real Sims 4 install.
 import contextlib
 import importlib
 import io
+import json
 import os
 import struct
 import sys
@@ -295,6 +296,140 @@ class BuildersRefuseWithoutTheGame(unittest.TestCase):
                     bad.append(name)
         self.assertEqual(bad, [], 'these reported success with no game '
                                   'installed: %s' % ', '.join(bad))
+
+
+class TheIndexOutputsMustAgree(unittest.TestCase):
+    """`keys.bin` is read back as a flat record array whose length is trusted.
+
+    A short keys.bin does not look short - it looks like a library with fewer
+    resources in it, and every query over the index is then quietly wrong. So
+    the property that matters is not "did the build finish" but "do the two
+    outputs still describe the same number of resources", which is a contract
+    between the writer and `build_packs.py` that reads it.
+
+    The build used to leave both files open and close them only on the happy
+    path, so an exception escaping the loop dropped whatever was still buffered.
+    """
+
+    def rig(self, tmp, packages):
+        """Point build_packages at synthetic packages. -> the module.
+
+        `dbpf_index` is a module these tests patch and `importlib.reload` does
+        NOT put it back - reload rebinds build_packages' own names, not another
+        module's attributes. Restoring it here rather than in each test is the
+        difference between three independent tests and three that pass or fail
+        depending on the order they ran in.
+        """
+        import build_packages
+        with support.environment(SULSKILL_OUT=tmp, TS4_INSTALL=tmp):
+            importlib.reload(build_packages)
+        for mod, attr in ((build_packages.dbpf_index, 'index'),
+                          (build_packages.restypes, 'type_names')):
+            self.addCleanup(setattr, mod, attr, getattr(mod, attr))
+        # type_names() reads the game's core.zip. This file must not touch the
+        # real install - the type-name lookup only decorates the jsonl output
+        # and nothing asserted here depends on it.
+        build_packages.restypes.type_names = lambda: {}
+        build_packages.walk_packages = lambda _root: list(packages)
+        build_packages.cfg_priorities = lambda _d: {}
+        return build_packages
+
+    def package(self, tmp, name, count):
+        """A real DBPF with `count` string-table resources in it."""
+        path = os.path.join(tmp, name)
+        with open(path, 'wb') as f:
+            f.write(support.dbpf([(0x220557DA, i, b'payload-%d' % i, 0)
+                                  for i in range(count)]))
+        return path
+
+    def outputs(self, mod):
+        keys = os.path.join(mod.OUT, 'keys.bin')
+        jsonl = os.path.join(mod.OUT, 'packages.jsonl')
+        with open(keys, 'rb') as f:
+            raw = f.read()
+        rows = []
+        with open(jsonl, encoding='utf-8') as f:
+            for line in f:
+                if line.strip():
+                    rows.append(json.loads(line))
+        return raw, rows
+
+    def test_the_two_outputs_agree_on_how_many_resources_there_were(self):
+        tmp = tempfile.mkdtemp()
+        mod = self.rig(tmp, [self.package(tmp, 'a.package', 3),
+                             self.package(tmp, 'b.package', 5)])
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
+            mod.main()
+        raw, rows = self.outputs(mod)
+        self.assertEqual(sum(r.get('entries', 0) for r in rows), 8)
+        self.assertEqual(len(raw), 8 * mod.REC.size)
+
+    def test_an_unreadable_package_is_recorded_and_the_build_continues(self):
+        """Deliberate: one bad package in a 1,281-package install must not cost
+        the whole index. The failure is written into packages.jsonl as an
+        `error` row so it is visible rather than silently absent."""
+        tmp = tempfile.mkdtemp()
+        mod = self.rig(tmp, [self.package(tmp, 'a.package', 4),
+                             self.package(tmp, 'b.package', 2)])
+        real = mod.dbpf_index.index
+
+        def explode(path):
+            if path.endswith('b.package'):
+                raise RuntimeError('unreadable')
+            return real(path)
+        mod.dbpf_index.index = explode
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(buf):
+            mod.main()
+        raw, rows = self.outputs(mod)
+        self.assertEqual(len(raw), 4 * mod.REC.size)
+        self.assertEqual([r['path'] for r in rows if 'error' in r],
+                         ['b.package'])
+
+    def test_an_exception_escaping_the_loop_does_not_lose_what_was_written(self):
+        """The build still fails - that is correct - but what reached disk must
+        be whole records for the packages actually indexed, not a torn tail or
+        an empty file.
+
+        Honest about what this does and does not pin. It does NOT discriminate
+        the `with` block from the bare open/close that preceded it: putting the
+        old shape back leaves this green, because CPython's refcounting reclaims
+        the file objects as the exception unwinds and flushes them on the way.
+        The `with` is still the right shape - it makes that a guarantee of the
+        language rather than of one implementation's collector - but the claim
+        this test supports is the narrower one, that a failed build leaves the
+        two outputs consistent with each other.
+
+        Kept anyway, because that consistency is a real contract with
+        build_packs.py and would catch a future refactor that genuinely buffers
+        something and loses it. `classify` runs outside the per-package try, so
+        a failure there is the genuinely uncaught kind.
+        """
+        tmp = tempfile.mkdtemp()
+        mod = self.rig(tmp, [self.package(tmp, 'a.package', 4),
+                             self.package(tmp, 'b.package', 2)])
+        real = mod.classify
+
+        def explode(rel):
+            if rel.endswith('b.package'):
+                raise RuntimeError('disk on fire')
+            return real(rel)
+        mod.classify = explode
+
+        buf = io.StringIO()
+        with self.assertRaises(RuntimeError):
+            with contextlib.redirect_stderr(buf), \
+                    contextlib.redirect_stdout(buf):
+                mod.main()
+
+        raw, rows = self.outputs(mod)
+        self.assertEqual(len(raw) % mod.REC.size, 0,
+                         'keys.bin ends mid-record')
+        self.assertEqual(len(raw), 4 * mod.REC.size,
+                         'the indexed package did not survive the failure')
+        self.assertEqual(sum(r.get('entries', 0) for r in rows), 4)
 
 
 class BytecodeHelpers(unittest.TestCase):

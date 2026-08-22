@@ -144,10 +144,17 @@ def main():
     t0 = time.time()
     pkgs = list(walk_packages(GAME))
     prio_cache = {}
-    # Both under `with`, because build_packs.py reads keys.bin back as a flat
-    # record array and trusts its length. An exception escaping the loop below
-    # used to leave whatever was still buffered unwritten, and a short keys.bin
-    # does not look short - it looks like a library with fewer resources in it.
+    # Both under `with`. build_packs.py reads keys.bin back as a flat record
+    # array and trusts its length, and a short keys.bin does not look short -
+    # it looks like a library with fewer resources in it.
+    #
+    # The previous shape opened both bare and closed them only after the loop
+    # returned, so on an error path the flush depended on the interpreter
+    # reclaiming the file objects. Under CPython refcounting it does: a
+    # mutation test put the old shape back and it still wrote whole records,
+    # so this was not losing data in practice. `with` makes it a guarantee of
+    # the language rather than of one implementation's collector, which is the
+    # right footing for the file every later query trusts.
     with open(os.path.join(OUT, 'packages.jsonl'), 'w',
               encoding='utf-8') as jsonl, \
             open(os.path.join(OUT, 'keys.bin'), 'wb') as keys:
