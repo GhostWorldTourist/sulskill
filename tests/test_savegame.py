@@ -15,8 +15,14 @@ it cannot control, and the checks are what these tests exercise:
   - Life stage and gender names are read out of the installed game rather than
     remembered. When the game cannot be read that must degrade to a stored copy
     AND say so, because the report prints which was used.
-  - Nothing about pets, traits or skills is claimed anywhere, and that is
-    asserted rather than left to good intentions.
+  - Species needs BOTH `Species` and `SpeciesExtended` out of the game, because
+    the small dog is only in the second. Reading one of them is how the field
+    was missed on the first pass: a filter built from the incomplete enum
+    excluded the very field it was looking for.
+  - Nothing about traits, skills or pregnancy is claimed anywhere, and that is
+    asserted rather than left to good intentions. Pregnancy is the pointed one:
+    the only candidate field links Sims *mutually*, and pregnancy is
+    asymmetric, so a count would have been invented.
 
 The page-level tests cover the one bug that made the report ship blank: the
 shared script and a report's own script share a <script> block, so a redeclared
@@ -101,13 +107,15 @@ def household(hid, name, funds, lid=None, creator='Tester'):
     return bfield(savegame.F_HOUSEHOLD, body)
 
 
-def sim(first, last, hid, gender=FEMALE, age=YOUNGADULT, surname=None):
+def sim(first, last, hid, gender=FEMALE, age=YOUNGADULT, surname=None,
+        species=1):
     return bfield(savegame.F_SIM,
                   i64field(savegame.S_HOUSEHOLD, ident(hid))
                   + bfield(savegame.S_FIRST, first)
                   + bfield(savegame.S_LAST, last)
                   + vfield(savegame.S_GENDER, gender)
                   + vfield(savegame.S_AGE, age)
+                  + vfield(savegame.S_SPECIES, species)
                   + bfield(savegame.S_SURNAME,
                            last if surname is None else surname))
 
@@ -278,12 +286,81 @@ class TheSelfCheckHasToBeAbleToFail(unittest.TestCase):
         self.assertIn('save-data resource', str(caught.exception))
 
 
+class PetsAreSimsToo(unittest.TestCase):
+    """The species field was missed on the first pass and the SEARCH caused it.
+    A filter looked for a field whose values all fell inside `Species` -
+    {0,1,2,3,5,6} - and the field it wanted also carries 4, which is not in
+    Species at all. It is SpeciesExtended.SMALLDOG. A filter built from an
+    incomplete enum excluded the very field it was looking for."""
+
+    def household_with_pets(self):
+        return (world(10, 'W') + lot(20, 'Home', 10)
+                + household(30, 'Goth', 100, lid=20)
+                + sim('Bella', 'Goth', 30, FEMALE, YOUNGADULT)
+                + sim('Mortimer', 'Goth', 30, MALE, ELDER)
+                + sim('Whiskers', 'Goth', 30, FEMALE, 32, species=3)
+                + sim('Rosie', 'Goth', 30, FEMALE, 32, species=4))
+
+    def read(self, payload):
+        return savegame.Save(write_save(tempfile.mkdtemp(), payload))
+
+    def test_the_small_dog_has_a_name(self):
+        """The value that broke the first search. It is only in
+        SpeciesExtended, so reading Species alone leaves it unnamed."""
+        self.assertEqual(self.read(self.household_with_pets()).species[4],
+                         'Small dog')
+
+    def test_pets_are_separated_from_people(self):
+        save = self.read(self.household_with_pets())
+        self.assertEqual(sorted(s['first'] for s in save.people()),
+                         ['Bella', 'Mortimer'])
+        self.assertEqual(sorted(s['first'] for s in save.pets()),
+                         ['Rosie', 'Whiskers'])
+
+    def test_the_life_stage_chart_counts_people_only(self):
+        """Pets are Sims, and counting them together makes a chart that mixes
+        toddlers with kittens."""
+        save = self.read(self.household_with_pets())
+        self.assertEqual(sum(n for _a, n in save.by_age()), 2)
+        self.assertEqual(sum(save.by_gender().values()), 2)
+
+    def test_a_sim_with_no_species_field_is_a_person(self):
+        """Any record where the field is absent. Defaulting to anything else
+        would invent an animal."""
+        payload = (world(10, 'W') + household(30, 'Goth', 1)
+                   + bfield(savegame.F_SIM,
+                            i64field(savegame.S_HOUSEHOLD, ident(30))
+                            + bfield(savegame.S_FIRST, 'Bella')
+                            + bfield(savegame.S_LAST, 'Goth')
+                            + vfield(savegame.S_GENDER, FEMALE)
+                            + vfield(savegame.S_AGE, YOUNGADULT)))
+        save = self.read(payload)
+        self.assertEqual(len(save.people()), 1)
+        self.assertEqual(save.pets(), [])
+
+    def test_a_species_the_game_cannot_name_is_reported(self):
+        """The check that would have caught the miss on sight."""
+        payload = (world(10, 'W') + household(30, 'Goth', 1)
+                   + sim('Thing', 'Goth', 30, species=99))
+        self.assertTrue(any('species values' in c
+                            for c in self.read(payload).verify()))
+
+    def test_households_count_pets_among_their_members(self):
+        """A cat lives in the household. Excluding it would be a different lie
+        from counting it as a person."""
+        save = self.read(self.household_with_pets())
+        self.assertEqual(len(save.households[0]['members']), 4)
+
+
 class LabelsComeFromTheGame(unittest.TestCase):
 
     def test_the_enum_names_are_read_out_of_the_installed_game(self):
         """Not remembered. INFANT = 128 is exactly the sort of value a tool
-        author is confidently wrong about."""
-        ages, genders, source = savegame.enums()
+        author is confidently wrong about, and SMALLDOG lives in a different
+        class from every other species."""
+        ages, genders, species, source = savegame.enums()
+        self.assertEqual(species[4], 'Small dog')
+        self.assertEqual(species[1], 'Human')
         self.assertEqual(genders, {4096: 'Male', 8192: 'Female'})
         self.assertEqual(ages[16], 'Young Adult')
         self.assertEqual(ages[128], 'Infant')
@@ -294,19 +371,21 @@ class LabelsComeFromTheGame(unittest.TestCase):
         claim on the page that nothing backs."""
         with support.environment(SIMS4_GAME_DIR=tempfile.mkdtemp()):
             with _no_registry():
-                ages, genders, source = savegame.enums()
+                ages, genders, species, source = savegame.enums()
         self.assertEqual(source, 'a stored copy')
         self.assertEqual(ages, savegame.FALLBACK_AGE)
         self.assertEqual(genders, savegame.FALLBACK_GENDER)
+        self.assertEqual(species, savegame.FALLBACK_SPECIES)
 
     def test_the_stored_copy_agrees_with_the_game(self):
         """If these ever diverge, the fallback is quietly wrong - which is the
         failure mode a fallback exists to avoid."""
-        ages, genders, source = savegame.enums()
+        ages, genders, species, source = savegame.enums()
         if source != 'the installed game':
             self.skipTest('no game installed to compare against')
         self.assertEqual(ages, savegame.FALLBACK_AGE)
         self.assertEqual(genders, savegame.FALLBACK_GENDER)
+        self.assertEqual(species, savegame.FALLBACK_SPECIES)
 
 
 @contextlib.contextmanager
@@ -378,12 +457,29 @@ class ThePage(unittest.TestCase):
         self.assertIn('How this page was read', self.html)
         self.assertIn('4 of 4 Sims', self.html)
 
-    def test_it_claims_nothing_about_pets_traits_or_skills(self):
-        """Fields that were not identified to a standard worth printing. A
-        guess about somebody's game is worse than a gap."""
+    def test_it_claims_nothing_about_traits_skills_or_pregnancy(self):
+        """Fields not identified to a standard worth printing. Pregnancy is the
+        pointed one: the only candidate field links Sims MUTUALLY, and
+        pregnancy is asymmetric, so a "pregnant" count would be invented."""
         body = self.html.lower()
         for word in ('trait', 'skill', 'aspiration'):
             self.assertNotIn('%ss:' % word, body)
+        self.assertNotIn('pregnant', body)
+
+    def test_a_save_with_no_animals_says_nothing_about_animals(self):
+        """Rather than a row of zeroes about a household that never owned a
+        cat."""
+        self.assertEqual(self.save.pets(), [])
+        self.assertNotIn('<h2>Animals', self.html)
+
+    def test_a_save_with_animals_counts_them_by_species(self):
+        payload = (world(10, 'W') + household(30, 'Goth', 1)
+                   + sim('Bella', 'Goth', 30)
+                   + sim('Whiskers', 'Goth', 30, species=3))
+        html, _c = save_report.build(
+            savegame.Save(write_save(tempfile.mkdtemp(), payload)))
+        self.assertIn('<h2>Animals', html)
+        self.assertIn('Cat', html)
 
     def test_a_failed_check_is_printed_on_the_page_not_swallowed(self):
         tmp = tempfile.mkdtemp()

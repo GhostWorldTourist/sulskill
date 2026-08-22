@@ -47,8 +47,22 @@ class NameHashes(unittest.TestCase):
         self.assertEqual(simdata.fnv32('PECO:trait_isCindyRotique'), 0xD736EE1D)
 
     def test_fnv32_is_not_fnv1a(self):
+        """Two contrasts, because they pin different things.
+
+        Against `fnv1a32` - xor-then-multiply over the ORIGINAL casing - this
+        reproduces the variant that actually shipped, wrong in both respects.
+
+        Against `fnv1a32(name.lower())` it isolates the operation order, and
+        that is the one worth pinning: with the casing equalised the only
+        remaining difference is multiply-then-xor versus xor-then-multiply.
+        The first assertion cannot detect the order flipping on its own,
+        because the casing difference keeps the two unequal either way - a
+        mutation that turned fnv32 into plain FNV-1a left this test green and
+        was caught only by the real-stored-value test next door.
+        """
         name = 'PECO:trait_isCindyRotique'
         self.assertNotEqual(simdata.fnv32(name), fnv1a32(name))
+        self.assertNotEqual(simdata.fnv32(name), fnv1a32(name.lower()))
 
     def test_hashes_lowercase_the_name(self):
         self.assertEqual(simdata.fnv32('AbC'), simdata.fnv32('abc'))

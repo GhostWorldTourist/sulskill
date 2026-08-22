@@ -124,6 +124,34 @@ MUTATIONS = [
      'test_a_scrambled_household_join_is_reported'),
 ]
 
+# ---- the historical rounds -------------------------------------------------
+#
+# tests/README.md describes these in prose - they were mutated by hand before
+# this script existed and the checks were not kept. Reconstructed from that
+# prose against the code as it stands. Where the README names a defect whose
+# code has since been rewritten past recognition, it is left out rather than
+# approximated: a mutation that does not correspond to a real defect proves
+# nothing about the test that catches it.
+MUTATIONS += [
+    ('fnv1a-for-fnv1: the name hash with its operations the wrong way round',
+     'sulskill-modbuild/scripts/simdata.py',
+     "        h = ((h * 0x01000193) & 0xFFFFFFFF) ^ b",
+     "        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF",
+     'test_fnv32_is_not_fnv1a'),
+
+    ('case-sensitive load order: the winner of a contested buff reversed',
+     f'{DOCTOR}/moodprint.py',
+     "    return sorted(rels, key=lambda r: r.replace(os.sep, '/').lower())",
+     "    return sorted(rels, key=lambda r: r.replace(os.sep, '/'))",
+     'test_case_does_not_decide_the_winner'),
+
+    ('keep-list collision: a search term that also selects a mod to keep',
+     f'{DOCTOR}/apply_plan.py',
+     "        if n >= MIN_HITS and not any(c.lower() in k for k in keep_lower)}",
+     "        if n >= MIN_HITS}",
+     'test_no_term_selects_something_on_the_keep_list'),
+]
+
 
 def norm(text):
     return text.replace('\r\n', '\n')

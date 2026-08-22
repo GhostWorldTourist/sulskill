@@ -33,7 +33,11 @@ import report_style
 CHIPS = """
       <button class="chip" id="f-housed" aria-pressed="false">Housed</button>
       <button class="chip" id="f-unhoused" aria-pressed="false">No home</button>
-      <button class="chip" id="f-rich" aria-pressed="false">Over §20,000</button>
+      <label class="wealth" for="f-wealth">Funds at least
+        <output id="f-wealthout">§0</output>
+        <input type="range" id="f-wealth" min="0" max="__MAXFUNDS__"
+               step="__STEP__" value="0" aria-label="Minimum household funds">
+      </label>
       <button class="chip" id="f-clear" aria-pressed="false">Reset</button>"""
 
 EXTRA_CSS = r"""
@@ -74,10 +78,26 @@ h2 small{font-weight:400;font-size:13px;color:var(--ink-2);margin-left:8px}
 .prov li{margin:5px 0}
 .prov code{font-size:12.5px;background:var(--panel-3);padding:1px 5px;
   border-radius:4px}
+.wealth{display:flex;align-items:center;gap:8px;font-size:13px;
+  color:var(--ink-2);white-space:nowrap}
+.wealth output{font-variant-numeric:tabular-nums;color:var(--ink);
+  min-width:74px;display:inline-block}
+.wealth input[type=range]{accent-color:var(--plumbob);width:150px;
+  vertical-align:middle}
+.wrow{cursor:pointer}
+.wrow:hover{background:var(--panel-3)}
+.wrow[aria-pressed="true"]{background:var(--plumbob-wash);
+  box-shadow:inset 3px 0 0 var(--plumbob)}
+.rows header.wrow{cursor:default}
+.rows header.wrow:hover{background:var(--panel-2)}
 .ok{color:var(--plumbob-ink)}
 .bad{color:var(--cheat)}
 """
 
+# Uses the helpers report_style.SCRIPT already defines - esc, wireChip, on,
+# wireSearch - rather than its own. They share one <script> block, so a second
+# `const esc` here is not a shadowed copy, it is a SyntaxError that stops the
+# whole block and silently leaves the page with no list on it.
 # Uses the helpers report_style.SCRIPT already defines - esc, wireChip, on,
 # wireSearch - rather than its own. They share one <script> block, so a second
 # `const esc` here is not a shadowed copy, it is a SyntaxError that stops the
@@ -88,16 +108,22 @@ const list = document.getElementById('list');
 const q = document.getElementById('q');
 const cHoused = document.getElementById('f-housed');
 const cNoHome = document.getElementById('f-unhoused');
-const cRich = document.getElementById('f-rich');
+const wealth = document.getElementById('f-wealth');
+const wealthOut = document.getElementById('f-wealthout');
+let world = null;                    // set by clicking a neighbourhood row
+
+function money(n){ return '§' + n.toLocaleString(); }
 
 function render(){
   const term = (q.value||'').toLowerCase().trim();
-  const wantHoused = on(cHoused), wantNoHome = on(cNoHome), rich = on(cRich);
+  const wantHoused = on(cHoused), wantNoHome = on(cNoHome);
+  const floor = Number(wealth.value) || 0;
   let rows = '', n = 0;
   for(const h of HH){
     if(wantHoused && !h.w) continue;
     if(wantNoHome && h.w) continue;
-    if(rich && h.f <= 20000) continue;
+    if(world !== null && h.w !== world) continue;
+    if(h.f < floor) continue;
     if(term && !(h.n.toLowerCase().includes(term)
       || (h.w||'').toLowerCase().includes(term)
       || (h.l||'').toLowerCase().includes(term)
@@ -109,18 +135,41 @@ function render(){
       + (h.w ? esc(h.l) + '<br><span class="muted">' + esc(h.w) + '</span>'
              : '<span class="muted">no home</span>')
       + '</div><div class="num">' + h.c + '</div>'
-      + '<div class="num">§' + h.f.toLocaleString() + '</div></div>';
+      + '<div class="num">' + money(h.f) + '</div></div>';
   }
   list.innerHTML = n ? ('<div class="card"><div class="rows">'
     + '<header class="row hrow"><div>Household</div><div>Lives at</div>'
     + '<div class="num">Sims</div><div class="num">Funds</div></header>'
     + rows + '</div></div>') : '';
   document.getElementById('count').textContent =
-    n + ' of ' + HH.length + ' households';
+    n + ' of ' + HH.length + ' households'
+    + (world !== null ? ' in ' + world : '');
   document.getElementById('empty').hidden = n > 0;
   document.getElementById('emptyq').textContent =
     term ? '“' + term + '”' : '';
 }
+
+// Clicking a neighbourhood filters the list to it; clicking it again clears.
+// The whole row is the control, so it carries button semantics rather than
+// looking clickable and being unreachable from a keyboard.
+for(const row of document.querySelectorAll('.wrow[data-world]')){
+  const pick = () => {
+    const name = row.getAttribute('data-world');
+    world = (world === name) ? null : name;
+    for(const other of document.querySelectorAll('.wrow[data-world]'))
+      other.setAttribute('aria-pressed',
+        other.getAttribute('data-world') === world ? 'true' : 'false');
+    render();
+    if(world !== null) list.scrollIntoView({behavior:'smooth', block:'start'});
+  };
+  row.addEventListener('click', pick);
+  row.addEventListener('keydown', e => {
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pick(); }
+  });
+}
+
+function syncWealth(){ wealthOut.textContent = money(Number(wealth.value)||0); }
+wealth.addEventListener('input', () => { syncWealth(); render(); });
 
 // Housed and No home are opposites; letting both latch would only ever show
 // an empty list, which reads as a broken page rather than a silly filter.
@@ -132,13 +181,16 @@ wireChip(cNoHome, () => {
   if(on(cNoHome)) cHoused.setAttribute('aria-pressed','false');
   render();
 });
-wireChip(cRich, render);
 document.getElementById('f-clear').addEventListener('click', () => {
-  for(const c of [cHoused, cNoHome, cRich])
-    c.setAttribute('aria-pressed','false');
+  for(const c of [cHoused, cNoHome]) c.setAttribute('aria-pressed','false');
+  for(const other of document.querySelectorAll('.wrow[data-world]'))
+    other.setAttribute('aria-pressed','false');
+  world = null;
+  wealth.value = 0; syncWealth();
   q.value = ''; render();
 });
 wireSearch(q, render);
+syncWealth();
 render();
 """
 
@@ -185,17 +237,42 @@ def world_rows(save):
     for w in worlds:
         occupied = sum(1 for l in w['lots'] if l['household'])
         empty_note = '' if w['households'] else ' class="muted"'
+        name = w['name'] or '(unnamed)'
+        # A world with nobody in it has nothing to filter to, so it is not a
+        # control - making it one would offer an empty list as a result.
+        clickable = bool(w['households'])
+        attrs = ('' if not clickable else
+                 ' data-world="%s" role="button" tabindex="0" '
+                 'aria-pressed="false"' % html.escape(name, quote=True))
         body.append(
-            '<div class="row wrow"><div%s>%s</div>'
+            '<div class="row wrow%s"%s><div%s>%s</div>'
             '<div class="num">%d</div><div class="num">%d</div>'
             '<div class="num">%d</div></div>'
-            % (empty_note, html.escape(w['name'] or '(unnamed)'),
-               len(w['lots']), occupied, w['population']))
+            % ('' if clickable else ' quiet', attrs, empty_note,
+               html.escape(name), len(w['lots']), occupied, w['population']))
     return ('<div class="card"><div class="rows">'
-            '<header class="row wrow"><div>World</div><div class="num">Lots'
-            '</div><div class="num">Lived in</div>'
+            '<header class="row wrow quiet"><div>World</div>'
+            '<div class="num">Lots</div><div class="num">Lived in</div>'
             '<div class="num">Sims</div></header>'
             + ''.join(body) + '</div></div>')
+
+
+def pet_row(save):
+    """The animals, if there are any. Silent when there are none rather than
+    printing a row of zeroes about a household that has never owned a cat."""
+    pets = save.pets()
+    if not pets:
+        return ''
+    counts = save.by_species()
+    chips = ''.join(
+        '<div class="stat"><b>%d</b><span>%s%s</span></div>'
+        % (n, html.escape(save.species.get(sp, 'Unknown')),
+           '' if n == 1 else 's')
+        for sp, n in counts)
+    withpets = len({id(s['household']) for s in pets if s['household']})
+    return ('<h2>Animals <small>%d in %d household%s</small></h2>'
+            '<div class="stats">%s</div>'
+            % (len(pets), withpets, '' if withpets == 1 else 's', chips))
 
 
 def notable(save):
@@ -267,9 +344,18 @@ def provenance(save, complaints):
     &mdash; read out of <code>sims/sim_info_types.pyc</code> rather than
     remembered, so a patch that adds a life stage is picked up instead of
     mislabelled.</li>
-    <li><strong>Nothing about pets, traits, skills or relationships is
-    claimed.</strong> Those fields were not identified to a standard worth
-    printing, and a guess about somebody's game is worse than a gap.</li>
+    <li><strong>Species came from the same place</strong> &mdash; and needed
+    both <code>Species</code> and <code>SpeciesExtended</code>, because the
+    small dog is only in the second. Reading one of them is how a save's small
+    dogs become a value nothing can name. Every species value here is named by
+    the game with none left over, and non-humans only ever take the three life
+    stages pets have.</li>
+    <li><strong>Pregnancy is not reported, and that is not an oversight.</strong>
+    The only field rare enough to be a candidate links Sims in pairs, and the
+    link is <em>mutual</em> &mdash; A points at B and B points back. Pregnancy
+    is asymmetric, so whatever that field is, it is not that. Nothing about
+    traits, skills or relationships is claimed either, for the same reason: a
+    guess about somebody's game is worse than a gap.</li>
   </ul>
 </div>"""
 
@@ -280,8 +366,10 @@ def build(save):
     when = datetime.datetime.fromtimestamp(save.mtime)
     creators = {h['creator'] for h in save.households if h['creator']}
 
+    people, pets = save.people(), save.pets()
     stats = ''.join((
-        stat(format(len(save.sims), ','), 'Sims'),
+        stat(format(len(people), ','), 'people',
+             ('and %d animals' % len(pets)) if pets else 'no animals'),
         stat(format(len(save.households), ','), 'households',
              '%d housed, %d without a home' % (len(housed), len(unhoused))),
         stat(format(len(save.occupied_worlds()), ','), 'worlds lived in',
@@ -300,6 +388,13 @@ def build(save):
                ', created by <strong>%s</strong>'
                % html.escape(sorted(creators)[0]) if len(creators) == 1 else ''))
 
+    # The slider only has to reach the richest household; a fixed ceiling
+    # would either stop short of it or leave most of the track unusable.
+    top = max([int(h['funds'] or 0) for h in save.households] or [0])
+    step = max(500, (top // 200) // 500 * 500 or 500)
+    chips = (CHIPS.replace('__MAXFUNDS__', str(top))
+                  .replace('__STEP__', str(step)))
+
     data = [{
         'n': h['name'] or '(unnamed)',
         'c': len(h['members']),
@@ -313,8 +408,9 @@ def build(save):
 
     body = (
         '<div class="stats">' + stats + '</div>'
-        + '<h2>Who lives here <small>every Sim, by life stage</small></h2>'
+        + '<h2>Who lives here <small>the people, by life stage</small></h2>'
         + age_bars(save)
+        + pet_row(save)
         + '<h2>Worth knowing</h2>' + notable(save)
         + '<h2>The neighbourhoods <small>busiest first</small></h2>'
         + world_rows(save)
@@ -331,7 +427,7 @@ def build(save):
     return report_style.page(
         title='Your Save',
         placeholder='Search households, Sims, worlds, lots…',
-        chips_html=CHIPS,
+        chips_html=chips,
         note_html=note,
         body_html=body,
         footer_html=footer,

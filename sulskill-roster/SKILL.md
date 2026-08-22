@@ -121,9 +121,19 @@ lot            1 id    2 name     10 world id  14 description
 - **Life stage and gender names are read out of the installed game**, from
   `sims/sim_info_types.pyc`, not remembered. That is where `INFANT = 128` comes
   from. A patch that adds a life stage is picked up rather than mislabelled.
-- **Nothing about pets, traits, skills or relationships is claimed.** No field
-  in the sample took species-shaped values, and a guess about somebody's game is
-  worse than a gap.
+- **Species needed both `Species` and `SpeciesExtended`.** The small dog is
+  only in the second, and reading the first alone is how the field was missed
+  entirely on the first pass: a filter screened for values inside `Species` -
+  {0,1,2,3,5,6} - and the field it wanted also carries 4. **A filter built from
+  an incomplete enum excluded the very field it was looking for.** Confirmed
+  once found: every value is named by the game with none left over, and
+  non-humans only take the three life stages pets have.
+- **Pregnancy is not reported, and that is not an oversight.** The only field
+  rare enough to be a candidate links Sims in pairs, and the link is *mutual* -
+  A points at B and B points back at A. Pregnancy is asymmetric, so whatever
+  that field is (spouse, partner, engaged), it is not that. Nothing about
+  traits, skills or relationships is claimed either: a guess about somebody's
+  game is worse than a gap.
 
 `Save.verify()` re-runs every one of those checks against the save in front of
 it and the page prints the result either way. A renumbered field should make it

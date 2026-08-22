@@ -32,9 +32,26 @@ requiring the reading to be falsifiable:
     rather than trusting anybody's memory of them. That is where INFANT = 128
     comes from; it is not written down here as a fact, it is looked up.
 
-  * Species is deliberately absent. No field in the sample took species-shaped
-    values, so there is nothing to report and a guess would have been a lie
-    about somebody's pets.
+  * `sim.species` was missed on the first pass, and the miss is worth recording
+    because the search caused it, not the data. A filter looked for a field
+    whose values all fell inside `Species` - {0,1,2,3,5,6} - found none, and
+    that was written up as "no field takes species-shaped values". The field
+    was there all along: it also carries 4, and 4 is not in `Species` at all,
+    it is `SpeciesExtended.SMALLDOG`. A filter built from an incomplete enum
+    excluded the very field it was looking for. `enums()` merges both classes
+    out of the game now, and `verify()` reports any species value the game
+    cannot name.
+
+    Confirmed two ways once found. Every value is named by the game's own
+    enums with none left over; and non-humans only ever take the ages
+    {CHILD, ADULT, ELDER} while humans use all eight, which is exactly the
+    life stages pets have in this game.
+
+  * **Pregnancy is not reported, and that is not an oversight.** The only field
+    rare enough to be a candidate, `f68`, links Sims in pairs - and the link is
+    MUTUAL: A points at B and B points back at A. Pregnancy is asymmetric, so
+    whatever that field is (spouse, partner, engaged), it is not that. It is
+    left unnamed rather than guessed at.
 
 `verify()` re-checks all of that at runtime against the save in front of it. A
 game patch that renumbers a field should make this say so, loudly, rather than
@@ -67,6 +84,7 @@ F_WORLD, F_HOUSEHOLD, F_SIM, F_LOT = 4, 5, 6, 7
 W_ID, W_NAME, W_DESC = 1, 3, 10
 H_ID, H_NAME, H_LOT, H_FUNDS, H_CREATOR = 2, 3, 4, 5, 21
 S_HOUSEHOLD, S_FIRST, S_LAST, S_GENDER, S_AGE, S_SURNAME = 4, 5, 6, 7, 8, 22
+S_SPECIES = 60
 L_ID, L_NAME, L_WORLD, L_DESC = 1, 2, 10, 14
 
 # Used only if the installed game cannot be read - see enums(). Kept because a
@@ -75,6 +93,13 @@ L_ID, L_NAME, L_WORLD, L_DESC = 1, 2, 10, 14
 FALLBACK_AGE = {1: 'Baby', 2: 'Toddler', 4: 'Child', 8: 'Teen',
                 16: 'Young Adult', 32: 'Adult', 64: 'Elder', 128: 'Infant'}
 FALLBACK_GENDER = {4096: 'Male', 8192: 'Female'}
+# Species AND SpeciesExtended together, because the game splits them: the small
+# dog is not in Species at all, it is SpeciesExtended.SMALLDOG = 4. Reading only
+# Species is how a save's small dogs become an unexplained value - see
+# `enums()`, which merges the two out of the game rather than hardcoding this.
+FALLBACK_SPECIES = {1: 'Human', 2: 'Dog', 3: 'Cat', 4: 'Small dog',
+                    5: 'Fox', 6: 'Horse'}
+HUMAN = 1
 
 AGE_ORDER = (128, 1, 2, 4, 8, 16, 32, 64)     # youngest to oldest, for display
 
@@ -102,7 +127,7 @@ COHERENCE_MIN_SAMPLE = 8
 
 
 def enums():
-    """Age and Gender names, read out of the installed game. -> (ages, genders, source)
+    """Age, Gender and Species names from the game. -> (ages, genders, species, source)
 
     The game ships its own Python, and `sims/sim_info_types.pyc` defines both
     enums. Reading them means a patch that adds a life stage is picked up
@@ -122,7 +147,8 @@ def enums():
         found = {}
         for c, _depth in pyc37.walk(co):
             name = getattr(c, 'name', None)
-            if name in ('Age', 'Gender') and name not in found:
+            if name in ('Age', 'Gender', 'Species',
+                        'SpeciesExtended') and name not in found:
                 got = _class_ints(c)
                 if got:
                     found[name] = got
@@ -130,11 +156,19 @@ def enums():
             ages = {v: _pretty(k) for k, v in found['Age'].items()
                     if v in AGE_ORDER}
             genders = {v: _pretty(k) for k, v in found['Gender'].items()}
-            if ages and genders:
-                return ages, genders, 'the installed game'
+            # SpeciesExtended EXTENDS Species rather than replacing it, so the
+            # two have to be merged. Reading Species alone leaves SMALLDOG
+            # undefined, and a save with one small dog in it then has a species
+            # value nothing can name.
+            merged = dict(found.get('Species', {}))
+            merged.update(found.get('SpeciesExtended', {}))
+            species = {v: _pretty(k) for k, v in merged.items() if v}
+            if ages and genders and species:
+                return ages, genders, species, 'the installed game'
     except Exception:                                          # noqa: BLE001
         pass
-    return dict(FALLBACK_AGE), dict(FALLBACK_GENDER), 'a stored copy'
+    return (dict(FALLBACK_AGE), dict(FALLBACK_GENDER),
+            dict(FALLBACK_SPECIES), 'a stored copy')
 
 
 def _class_ints(code):
@@ -158,8 +192,8 @@ def _class_ints(code):
 
 
 def _pretty(name):
-    """YOUNGADULT -> Young Adult, ELDER -> Elder."""
-    special = {'YOUNGADULT': 'Young Adult'}
+    """YOUNGADULT -> Young Adult, SMALLDOG -> Small dog, ELDER -> Elder."""
+    special = {'YOUNGADULT': 'Young Adult', 'SMALLDOG': 'Small dog'}
     if name in special:
         return special[name]
     return name.capitalize()
@@ -195,7 +229,8 @@ class Save:
         self.size = os.path.getsize(path)
         self.mtime = os.path.getmtime(path)
         self.worlds, self.households, self.sims, self.lots = [], [], [], []
-        self.ages, self.genders, self.enum_source = enums()
+        (self.ages, self.genders, self.species,
+         self.enum_source) = enums()
         self._read()
 
     # ---- reading -------------------------------------------------------
@@ -245,6 +280,7 @@ class Save:
                 'household_id': _one(r, S_HOUSEHOLD),
                 'surname': _text(_one(r, S_SURNAME, b'')),
                 'gender': _one(r, S_GENDER), 'age': _one(r, S_AGE),
+                'species': _one(r, S_SPECIES, HUMAN),
                 'household': None}
 
     def _lot(self, r):
@@ -288,6 +324,21 @@ class Save:
     def gender_name(self, sim):
         return self.genders.get(sim['gender'], 'Unknown')
 
+    def species_name(self, sim):
+        return self.species.get(sim['species'], 'Unknown')
+
+    def people(self):
+        """Sims who are people. Pets are Sims too, and counting them together
+        makes a life-stage chart that mixes toddlers with kittens."""
+        return [s for s in self.sims if s['species'] == HUMAN]
+
+    def pets(self):
+        return [s for s in self.sims if s['species'] != HUMAN]
+
+    def by_species(self):
+        counts = collections.Counter(s['species'] for s in self.pets())
+        return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
     # ---- derived facts -------------------------------------------------
 
     def housed(self):
@@ -298,13 +349,13 @@ class Save:
 
     def by_age(self):
         """{age value: count}, in life-stage order."""
-        seen = collections.Counter(s['age'] for s in self.sims)
+        seen = collections.Counter(s['age'] for s in self.people())
         order = [a for a in AGE_ORDER if a in seen]
         order += [a for a in sorted(seen) if a not in AGE_ORDER]
         return [(a, seen[a]) for a in order]
 
     def by_gender(self):
-        return collections.Counter(s['gender'] for s in self.sims)
+        return collections.Counter(s['gender'] for s in self.people())
 
     def surnames(self, limit=10):
         counts = collections.Counter(s['last'] for s in self.sims if s['last'])
@@ -383,6 +434,13 @@ class Save:
         if unknown_sex:
             bad.append('gender values with no name in the game\'s own enum: %s'
                        % sorted(unknown_sex))
+        unknown_sp = {s['species'] for s in self.sims} - set(self.species)
+        if unknown_sp:
+            # The check that would have caught the SMALLDOG miss on sight: a
+            # species value the game's own enums cannot name is either a new
+            # species or a wrong field, and both are worth hearing about.
+            bad.append('species values with no name in the game\'s own enums: '
+                       '%s' % sorted(unknown_sp))
 
         nameless = [s for s in self.sims if not s['name']]
         if len(nameless) > len(self.sims) // 10:
