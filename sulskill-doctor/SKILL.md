@@ -209,13 +209,47 @@ py scripts/holdlog.py status     # what is out, and what it depends on
 py scripts/holdlog.py restore    # put it all back, journal or no journal
 ```
 
-**On a manual install, check the layout before trusting a round.** Bisection
-assumes one unit is one mod. That holds for a folder per mod; it does not hold
-for a flat pile of loose `.package` files, where a mod shipping four files is
-four units and a round can disable half of one — which behaves exactly like a
-broken mod and is not one. `install.py` reports the shape and warns; a top-level
-folder holding dozens of packages is a category, not a mod, and bisecting names
-the folder rather than what is inside it.
+### An organised library is evidence — read it, do not flatten it
+
+Somebody who filed their mods into named folders has already recorded where one
+mod ends. That is better than anything this tool can infer, so `manual_units()`
+reads it. One rule:
+
+> A folder that **directly contains** `.package`/`.ts4script` is one mod, and
+> everything beneath it belongs to that mod. A folder containing **only
+> subfolders** is a category — descend into it.
+
+```
+Mods/Gameplay/MCCC/*.package          -> Gameplay/MCCC          one mod
+Mods/Gameplay/Basemental/{bm.package,Addons/extra.package}
+                                      -> Gameplay/Basemental    one mod, Addons included
+Mods/CAS/Hair/skysims/hair.package    -> CAS/Hair/skysims       one mod
+Mods/loose.package                    -> loose.package          one mod
+```
+
+Taking top-level entries instead made `Gameplay` a single unit holding every
+gameplay mod in the library, so a bisection could name the filing cabinet and
+nothing inside it. Where the signals disagree — loose packages *and* subfolders
+in one folder — it is read as one mod and flagged: too coarse costs rounds,
+while splitting a mod costs a wrong answer.
+
+Units are named by path (`Gameplay/MCCC`) because two categories may each hold a
+`Fixes`. A bare leaf resolves too, but only when unambiguous — a leaf matching
+two mods is refused rather than guessed, and `arm` moves nothing until it is
+resolved. `plan --files` shows exactly what each unit covers before anything
+moves.
+
+**Their folders are theirs.** Files move individually and restore to identical
+relative paths; emptied folders are deliberately left standing in `Mods` during
+a round, so the library still looks like the library while a mod is pulled. The
+tidy-up only ever runs inside the holding directory, and only via `os.rmdir`,
+which refuses a non-empty directory. A test asserts the whole tree — directories
+included — is byte-identical after a round trip.
+
+**A flat layout is the one that needs care.** Loose `.package` files at the top
+of `Mods` mean a mod shipping four files is four units, and a round can disable
+half of one — which behaves exactly like a broken mod and is not one. Group them
+into folders first, or take the grouping from `deep_scan.py`, before cutting.
 
 ### Guards as instruments
 

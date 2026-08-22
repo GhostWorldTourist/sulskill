@@ -180,24 +180,81 @@ def units(root):
             if name:
                 out.setdefault(name, []).append(rel)
         return out
+    return manual_units(root)
+
+
+# How deep to keep looking for the folder that is a mod. Real libraries nest
+# three or four levels; a limit only stops a pathological tree from recursing
+# until Python gives up, and a folder at the limit is treated as one mod, which
+# is the conservative end.
+MAX_DEPTH = 12
+
+
+def manual_units(root):
+    """mod name -> [file path relative to root], for an install with no manager.
+
+    A meticulously organised library already records where one mod ends, in its
+    folder names, and that is better evidence than anything this tool could
+    infer - so read it instead of flattening it.
+
+    The rule, and it is the whole rule:
+
+        a folder that DIRECTLY contains .package or .ts4script files is one mod,
+        and everything beneath it belongs to that mod
+
+        a folder containing ONLY subfolders is a category - descend into it
+
+    So `Mods/Gameplay/MCCC/*.package` makes MCCC the unit and Gameplay a
+    category, and `Mods/Gameplay/Basemental/` keeps its own `Addons/` subfolder
+    rather than being split from it. Taking top-level entries instead made
+    "Gameplay" a single unit holding every gameplay mod in the library, so a
+    bisection could name the filing cabinet and nothing inside it.
+
+    Where the two signals disagree - a folder holding loose packages AND
+    subfolders - the folder is treated as one mod. That is the conservative
+    end: too coarse costs rounds, while splitting a mod produces a round that
+    behaves like a broken mod and is not one, which is a wrong answer rather
+    than a slow one.
+
+    Nothing here moves or renames anything. The unit names are the folder paths
+    exactly as they are on disk, and a round restores to the same paths.
+    """
+    out = {}
+
+    def files_under(abs_dir):
+        got = []
+        for dirpath, _dirs, fns in os.walk(abs_dir):
+            for fn in fns:
+                got.append(os.path.relpath(os.path.join(dirpath, fn), root))
+        return sorted(got)
+
+    def visit(abs_dir, rel_dir, depth):
+        try:
+            with os.scandir(abs_dir) as it:
+                entries = sorted(it, key=lambda e: e.name.lower())
+        except OSError:
+            return
+        subdirs = [e for e in entries if e.is_dir()]
+        direct = [e for e in entries if e.is_file()
+                  and e.name.lower().endswith(installinfo.MOD_SUFFIXES)]
+        if direct or not subdirs or depth >= MAX_DEPTH:
+            files = files_under(abs_dir)
+            if files:
+                out[rel_dir] = files
+            return
+        for e in subdirs:
+            visit(e.path, os.path.join(rel_dir, e.name), depth + 1)
+
     try:
-        entries = sorted(os.listdir(root))
+        with os.scandir(root) as it:
+            top = sorted(it, key=lambda e: e.name.lower())
     except OSError:
         return {}
-    for name in entries:
-        if name.lower().endswith('.json'):
-            continue
-        full = os.path.join(root, name)
-        if os.path.isdir(full):
-            files = []
-            for dirpath, _dirs, fns in os.walk(full):
-                for fn in fns:
-                    files.append(os.path.relpath(os.path.join(dirpath, fn),
-                                                 root))
-            if files:
-                out[name] = sorted(files)
-        else:
-            out[name] = [name]
+    for e in top:
+        if e.is_dir():
+            visit(e.path, e.name, 1)
+        elif e.name.lower().endswith(installinfo.MOD_SUFFIXES):
+            out[e.name] = [e.name]
     return out
 
 
@@ -213,14 +270,44 @@ def wanted(path):
 
 
 def resolve(root, names):
+    """Names from a cut file -> {unit name: [files]}, plus what did not match.
+
+    A unit on an organised manual install is named by its path - `Gameplay/MCCC`
+    - because two categories may each hold a folder called `Fixes` and the leaf
+    alone would not say which. Typing that path every round is miserable, so a
+    bare leaf resolves too, on one condition: it must be unambiguous. A leaf
+    matching two units is reported as unmatched rather than resolved to
+    whichever sorted first, because silently cutting the wrong mod produces a
+    round that proves something about a library nobody was testing.
+
+    Separators are accepted either way round, so a cut file written on one
+    machine reads on the other.
+    """
     index = units(root)
-    matched, missing = {}, []
+    by_leaf = {}
+    for key in index:
+        by_leaf.setdefault(key.replace('\\', '/').split('/')[-1].lower(),
+                           []).append(key)
+    normal = {k.replace('\\', '/').lower(): k for k in index}
+
+    matched, missing, ambiguous = {}, [], []
     for name in names:
-        if name in index:
+        want = name.strip().replace('\\', '/')
+        if name in index:                              # exact, as written
             matched[name] = index[name]
+        elif want.lower() in normal:                   # exact, either separator
+            key = normal[want.lower()]
+            matched[key] = index[key]
         else:
-            missing.append(name)
-    return matched, missing
+            hits = by_leaf.get(want.lower(), [])
+            if len(hits) == 1:
+                matched[hits[0]] = index[hits[0]]
+            elif len(hits) > 1:
+                ambiguous.append((name, sorted(hits)))
+                missing.append(name)
+            else:
+                missing.append(name)
+    return matched, missing, ambiguous
 
 
 def ts4_started():
@@ -351,8 +438,8 @@ def artifacts(since, marker=None):
     return sorted(hits), unsettled
 
 
-def cmd_plan(root, names):
-    matched, missing = resolve(root, names)
+def cmd_plan(root, names, verbose=False):
+    matched, missing, ambiguous = resolve(root, names)
     files = sum(len(v) for v in matched.values())
     print('target : %s' % root)
     # The install shape decides what the warnings have to say, so it is printed
@@ -362,10 +449,25 @@ def cmd_plan(root, names):
     print('matched: %d mod(s), %d file(s)' % (len(matched), files))
     for name in sorted(matched):
         print('   %-55s %d file(s)' % (name, len(matched[name])))
-    if missing:
+        # The files themselves on request. This is the round the caller is
+        # about to commit to, and it is where a unit that has swallowed more
+        # than one mod becomes obvious - while nothing has moved yet.
+        if verbose:
+            for rel in matched[name]:
+                print('      %s' % rel)
+    if ambiguous:
+        print('\nAMBIGUOUS - %d name(s) match more than one mod. Nothing was '
+              'chosen for these;' % len(ambiguous))
+        print('write the path of the one you meant:')
+        for name, hits in ambiguous:
+            print('   %s' % name)
+            for hit in hits:
+                print('      %s' % hit)
+    unresolved = [n for n in missing if not any(n == a for a, _ in ambiguous)]
+    if unresolved:
         print('\nNOT DEPLOYED (already off, or the name is wrong) - %d:'
-              % len(missing))
-        for name in missing:
+              % len(unresolved))
+        for name in unresolved:
             print('   %s' % name)
     if not matched:
         print('\nnothing to move.', file=sys.stderr)
@@ -387,7 +489,19 @@ def cmd_arm(root, names, start_game=False):
         print('\n'.join(holdlog.report(already)), file=sys.stderr)
         return 2
 
-    matched, missing = resolve(root, names)
+    matched, missing, ambiguous = resolve(root, names)
+    if ambiguous:
+        # Cutting the wrong mod proves something about a library nobody was
+        # testing, and it does it silently. Refuse the whole round rather than
+        # arm a set the caller did not choose.
+        print('%d name(s) match more than one mod, so nothing was moved. '
+              'Write the path' % len(ambiguous), file=sys.stderr)
+        print('of the one you meant:', file=sys.stderr)
+        for name, hits in ambiguous:
+            print('   %s' % name, file=sys.stderr)
+            for hit in hits:
+                print('      %s' % hit, file=sys.stderr)
+        return 2
     if not matched:
         print('none of those names are deployed - nothing to move.',
               file=sys.stderr)
@@ -660,6 +774,8 @@ def main(argv=None):
     ap.add_argument('--root', default=ROOT, help='the Mods folder')
     ap.add_argument('--marker', help='regex a report must match to count as the '
                                      'symptom; default is any new report')
+    ap.add_argument('--files', action='store_true',
+                    help='plan: list every file each mod resolves to')
     ap.add_argument('--launch', action='store_true',
                     help='start the game once the round is armed')
     a = ap.parse_args(argv)
@@ -673,7 +789,7 @@ def main(argv=None):
             return 2
         names = wanted(a.file)
         if a.action == 'plan':
-            return cmd_plan(a.root, names)
+            return cmd_plan(a.root, names, a.files)
         return cmd_arm(a.root, names, a.launch)
     if a.action == 'check':
         return cmd_check(a.marker)

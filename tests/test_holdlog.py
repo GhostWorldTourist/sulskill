@@ -418,20 +418,168 @@ class TheLayoutIsDetected(unittest.TestCase):
             text = '\n'.join(installinfo.describe(installinfo.detect(root)))
             self.assertIn('half', text)
 
-    def test_a_fat_folder_is_flagged_as_a_category_not_a_mod(self):
-        many = tuple('cas/f%02d.package' % i
-                     for i in range(installinfo.CATEGORY_HINT + 5))
-        with rig(files=many, managed=False) as (tmp, root, h):
+    def test_a_fat_category_folder_is_no_longer_a_hazard(self):
+        """It used to be one, and was warned about: units came from the top
+        level of Mods, so a folder called "cas" holding thirty mods became a
+        single unit and bisecting it could only ever name "cas".
+
+        manual_units() descends to the folder that directly holds the files, so
+        the nesting is now the information rather than the problem. The warning
+        is gone because the behaviour it warned about is gone.
+        """
+        many = tuple('cas/mod%02d/f.package' % i for i in range(30))
+        with manual_rig(files=many) as (tmp, root):
             info = installinfo.detect(root)
-            self.assertEqual(info['layout']['category'], ['cas'])
-            self.assertIn('categories rather than mods',
-                          '\n'.join(installinfo.describe(info)))
+            self.assertEqual(info['layout']['category'], [])
+            self.assertNotIn('categories rather than mods',
+                             '\n'.join(installinfo.describe(info)))
+            got = bs.units(root)
+            self.assertEqual(len(got), 30)
+            self.assertIn(os.path.join('cas', 'mod00'), got)
 
     def test_a_managed_install_is_not_given_a_layout_warning(self):
         with rig() as (tmp, root, h):
             info = installinfo.detect(root)
             self.assertEqual(info['layout']['shape'], 'managed')
             self.assertNotIn('half', '\n'.join(installinfo.describe(info)))
+
+
+class AnOrganisedLibraryIsReadTheWayItWasOrganised(unittest.TestCase):
+    """A library filed into named folders already records where one mod ends.
+    That is better evidence than anything this tool can infer, so the rule is
+    to read it rather than flatten it.
+
+    Taking top-level entries instead made a folder called "Gameplay" one unit
+    holding every gameplay mod in the library, so a bisection could name the
+    filing cabinet and nothing inside it.
+    """
+
+    ORGANISED = ('Gameplay/MCCC/mccc.package',
+                 'Gameplay/MCCC/mccc.ts4script',
+                 'Gameplay/Basemental/bm.package',
+                 'Gameplay/Basemental/Addons/extra.package',
+                 'CAS/Hair/skysims/hair.package',
+                 'loose.package')
+
+    def units(self, files):
+        with manual_rig(files=files) as (tmp, root):
+            return bs.units(root)
+
+    def test_a_category_is_descended_into_not_taken_as_one_mod(self):
+        got = self.units(self.ORGANISED)
+        self.assertNotIn('Gameplay', got)
+        self.assertIn(os.path.join('Gameplay', 'MCCC'), got)
+        self.assertIn(os.path.join('Gameplay', 'Basemental'), got)
+
+    def test_a_mod_keeps_its_own_subfolder(self):
+        """Basemental/Addons belongs to Basemental. Splitting them would make
+        a round disable half a mod, which behaves like a broken mod."""
+        got = self.units(self.ORGANISED)
+        self.assertEqual(got[os.path.join('Gameplay', 'Basemental')],
+                         [os.path.join('Gameplay', 'Basemental', 'Addons',
+                                       'extra.package'),
+                          os.path.join('Gameplay', 'Basemental', 'bm.package')])
+        self.assertNotIn(os.path.join('Gameplay', 'Basemental', 'Addons'), got)
+
+    def test_categories_nest_as_deep_as_they_like(self):
+        got = self.units(self.ORGANISED)
+        self.assertIn(os.path.join('CAS', 'Hair', 'skysims'), got)
+
+    def test_a_loose_file_at_the_top_is_still_its_own_mod(self):
+        self.assertIn('loose.package', self.units(self.ORGANISED))
+
+    def test_every_file_lands_in_exactly_one_unit(self):
+        """No file may be claimed twice, and none may be dropped - either would
+        arm a round that is not the round the caller asked for."""
+        got = self.units(self.ORGANISED)
+        seen = [rel for files in got.values() for rel in files]
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(len(seen), len(self.ORGANISED))
+
+    def test_a_folder_mixing_packages_and_subfolders_stays_one_mod(self):
+        """The two signals disagree. Too coarse costs rounds; splitting a mod
+        costs a wrong answer, so it is read as one mod - and flagged."""
+        with manual_rig(files=('Mixed/top.package',
+                               'Mixed/Sub/inner.package')) as (tmp, root):
+            got = bs.units(root)
+            self.assertEqual(sorted(got), ['Mixed'])
+            self.assertEqual(len(got['Mixed']), 2)
+            info = installinfo.detect(root)
+            self.assertEqual(info['layout']['ambiguous'], ['Mixed'])
+            self.assertIn('loose packages AND',
+                          '\n'.join(installinfo.describe(info)))
+
+    def test_an_organised_layout_is_told_it_is_the_good_shape(self):
+        with manual_rig(files=self.ORGANISED[:-1]) as (tmp, root):
+            text = '\n'.join(installinfo.describe(installinfo.detect(root)))
+            self.assertIn('one folder per mod', text)
+            self.assertNotIn('behaves like a broken mod', text)
+
+    def test_a_manager_manifest_still_wins(self):
+        """None of this applies to a managed install - the manifest is the
+        accurate answer and must not be second-guessed by folder shape."""
+        with rig() as (tmp, root, h):
+            self.assertEqual(sorted(bs.units(root)),
+                             ['alpha.package', 'bravo.package'])
+
+
+class NamingAModInACutFile(unittest.TestCase):
+
+    ORGANISED = ('Gameplay/MCCC/mccc.package',
+                 'CAS/Hair/skysims/hair.package',
+                 'Gameplay/Fixes/a.package',
+                 'CAS/Fixes/b.package')
+
+    def test_a_leaf_name_resolves_when_it_is_unambiguous(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            matched, missing, amb = bs.resolve(root, ['MCCC'])
+            self.assertEqual(sorted(matched), [os.path.join('Gameplay', 'MCCC')])
+            self.assertEqual((missing, amb), ([], []))
+
+    def test_a_full_path_resolves_with_either_separator(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            for written in ('Gameplay/MCCC', 'Gameplay\\MCCC'):
+                matched, _m, _a = bs.resolve(root, [written])
+                self.assertEqual(sorted(matched),
+                                 [os.path.join('Gameplay', 'MCCC')], written)
+
+    def test_a_leaf_matching_two_mods_is_refused_not_guessed(self):
+        """Resolving to whichever sorted first would cut a mod nobody named and
+        prove something about a library nobody was testing."""
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            matched, missing, amb = bs.resolve(root, ['Fixes'])
+            self.assertEqual(matched, {})
+            self.assertEqual(missing, ['Fixes'])
+            self.assertEqual(amb[0][0], 'Fixes')
+            self.assertEqual(amb[0][1], [os.path.join('CAS', 'Fixes'),
+                                         os.path.join('Gameplay', 'Fixes')])
+
+    def test_arming_an_ambiguous_name_moves_nothing(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            before = tree(root)
+            code, out = run_bs(['arm', cut(tmp, ['Fixes']), '--root', root])
+            self.assertEqual(code, 2)
+            self.assertIn('more than one mod', out)
+            self.assertEqual(tree(root), before)
+
+    def test_plan_lists_the_candidates_for_an_ambiguous_name(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            code, out = run_bs(['plan', cut(tmp, ['Fixes']), '--root', root])
+            self.assertIn('AMBIGUOUS', out)
+            self.assertIn(os.path.join('CAS', 'Fixes'), out)
+            self.assertIn(os.path.join('Gameplay', 'Fixes'), out)
+
+    def test_plan_can_show_every_file_a_mod_covers(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            code, out = run_bs(['plan', cut(tmp, ['MCCC']), '--root', root,
+                                '--files'])
+            self.assertIn('mccc.package', out)
+
+    def test_a_name_that_matches_nothing_is_still_reported_missing(self):
+        with manual_rig(files=self.ORGANISED) as (tmp, root):
+            _m, missing, amb = bs.resolve(root, ['NoSuchMod'])
+            self.assertEqual(missing, ['NoSuchMod'])
+            self.assertEqual(amb, [])
 
 
 class StandaloneRecovery(unittest.TestCase):
@@ -536,6 +684,36 @@ class ArmingAManualInstall(unittest.TestCase):
             self.assertNotIn('MISSING', out)
             self.assertNotIn('(unrecorded)', out)
 
+    def test_the_whole_mods_tree_is_identical_after_a_round(self):
+        """The promise to anyone who filed their library by hand: their folder
+        names and their nesting are theirs, and a round trip returns the tree
+        exactly - same directories, same paths, same bytes. Asserted over the
+        WHOLE tree rather than the files that moved, because the failure worth
+        catching is a tidy-up that removes an emptied folder or flattens a
+        level nobody asked it to touch."""
+        with manual_rig(files=(
+                'Gameplay/MCCC/mccc.package',
+                'Gameplay/MCCC/mccc.ts4script',
+                'Gameplay/Basemental/bm.package',
+                'Gameplay/Basemental/Addons/extra.package',
+                'CAS/Hair/skysims/hair.package',
+                'loose.package')) as (tmp, root):
+            os.makedirs(os.path.join(root, 'Build', 'Empty'), exist_ok=True)
+            before = tree(root)
+            run_bs(['arm', cut(tmp, ['MCCC', 'Basemental', 'skysims']),
+                    '--root', root])
+            code, _ = run_bs(['restore'])
+            self.assertEqual(code, 0)
+            self.assertEqual(tree(root), before)
+
+    def test_arming_leaves_the_folders_standing(self):
+        """Emptied folders stay put during a round, so the library still looks
+        like the library while a mod is pulled out of it."""
+        with manual_rig(files=('Gameplay/MCCC/mccc.package',)) as (tmp, root):
+            run_bs(['arm', cut(tmp, ['MCCC']), '--root', root])
+            self.assertTrue(os.path.isdir(os.path.join(root, 'Gameplay',
+                                                       'MCCC')))
+
     def test_restore_after_a_lost_ledger_still_works(self):
         """The whole point, end to end: destroy the bookkeeping the tool keeps
         for itself and the mods still go home."""
@@ -549,6 +727,24 @@ class ArmingAManualInstall(unittest.TestCase):
 
 
 # ---- helpers ----------------------------------------------------------
+
+def tree(root):
+    """Every directory and every file under `root`, with contents.
+
+    Directories are included on purpose: a restore that put the files back but
+    dropped an emptied folder would pass a files-only comparison and would
+    still have rearranged somebody's library.
+    """
+    out = {}
+    for dirpath, dirs, files in os.walk(root):
+        rel_dir = os.path.relpath(dirpath, root)
+        for d in dirs:
+            out[os.path.join(rel_dir, d) + os.sep] = None
+        for f in files:
+            with open(os.path.join(dirpath, f), 'rb') as fh:
+                out[os.path.join(rel_dir, f)] = fh.read()
+    return out
+
 
 @contextlib.contextmanager
 def mock(obj, name, value):

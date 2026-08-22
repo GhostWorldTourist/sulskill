@@ -27,10 +27,13 @@ import os
 
 MOD_SUFFIXES = ('.package', '.ts4script')
 
-# A top-level folder holding more than this many packages is being used as a
-# category ("CAS", "Gameplay"), not as one mod. The number only has to separate
-# a fat single mod from a filing cabinet, and nothing rides on the exact value:
-# it changes a warning, never a move.
+# Kept for callers that still ask, but nothing in this module decides anything
+# with it any more. A deep folder used to be a hazard, because units were taken
+# from the top level of Mods and a folder called "Gameplay" became one unit
+# holding every gameplay mod in the library. bisect_mods.manual_units() now
+# descends to the folder that directly holds the mod files, so an organised
+# library is read the way it was organised - the nesting is the information,
+# not the problem.
 CATEGORY_HINT = 25
 
 
@@ -136,10 +139,16 @@ def layout(root):
     Returned as a dict rather than a verdict because the shapes fail
     differently and the caller warns differently for each:
 
-      folders  one folder per mod - the shape bisection assumes
+      folders  one folder per mod, possibly filed under categories - the shape
+               bisection wants, and the one that needs no warning at all
       flat     loose files at the top of Mods, so a mod that ships several
                files is several units and a round can split it in half
-      mixed    both, so both warnings apply
+      mixed    both, so the loose half carries the flat warning
+
+    `ambiguous` is the one structural hazard left: a folder holding loose mod
+    files AND subfolders, where the two signals disagree about whether it is a
+    mod or a category. It is treated as one mod, which is the safe end, but a
+    caller bisecting it should know it may be coarser than it looks.
     """
     dirs, loose, other = [], [], 0
     try:
@@ -158,17 +167,23 @@ def layout(root):
         else:
             other += 1
 
-    # Folders big enough to be a filing cabinet rather than a mod. Bisecting
-    # these still works, it just names "CAS" as the culprit, which is true and
-    # useless - so it is worth saying up front rather than after twenty rounds.
-    category = []
+    # Folders where the two signals disagree: loose mod files sitting beside
+    # subfolders, so the folder looks like a mod and like a category at once.
+    # It is read as one mod - too coarse costs rounds, splitting a mod costs a
+    # wrong answer - but the caller should hear that it may hold more than one.
+    ambiguous = []
     for name in dirs:
-        n = 0
-        for _dp, _dn, files in os.walk(os.path.join(root, name)):
-            n += sum(1 for f in files if f.lower().endswith(MOD_SUFFIXES))
-            if n > CATEGORY_HINT:
-                category.append(name)
-                break
+        full = os.path.join(root, name)
+        try:
+            with os.scandir(full) as it:
+                kids = list(it)
+        except OSError:
+            continue
+        has_files = any(k.is_file() and k.name.lower().endswith(MOD_SUFFIXES)
+                        for k in kids)
+        has_dirs = any(k.is_dir() for k in kids)
+        if has_files and has_dirs:
+            ambiguous.append(name)
 
     if not dirs and not loose:
         shape = 'empty'
@@ -179,7 +194,7 @@ def layout(root):
     else:
         shape = 'mixed'
     return {'shape': shape, 'dirs': dirs, 'loose': loose,
-            'category': category, 'other': other}
+            'ambiguous': ambiguous, 'category': [], 'other': other}
 
 
 def detect(root):
@@ -210,7 +225,7 @@ def detect(root):
         'hardlinked': hardlinked(root),
         'layout': layout(root) if kind == 'manual' else
                   {'shape': 'managed', 'dirs': [], 'loose': [],
-                   'category': [], 'other': 0},
+                   'ambiguous': [], 'category': [], 'other': 0},
     }
 
 
@@ -235,7 +250,14 @@ def describe(info):
         out.append('          them, and restore before uninstalling anything.')
 
     shape = info['layout']['shape']
-    if shape in ('flat', 'mixed'):
+    if shape == 'folders':
+        # Worth saying out loud rather than staying quiet. A library filed into
+        # named folders records where one mod ends, which is exactly what a
+        # bisection needs and cannot otherwise know.
+        out.append('layout  : one folder per mod. That is the shape this reads '
+                   'best - the')
+        out.append('          folder names are taken as the mod boundaries.')
+    elif shape in ('flat', 'mixed'):
         which = ('loose files at the top of Mods' if shape == 'flat'
                  else 'folders and loose files')
         out.append('layout  : %s. A mod that ships several loose' % which)
@@ -246,12 +268,15 @@ def describe(info):
         out.append('          Group them into folders first, or take the '
                    'grouping from')
         out.append('          deep_scan.py, before cutting.')
-    if info['layout']['category']:
-        names = ', '.join(info['layout']['category'][:4])
-        more = (' and %d more' % (len(info['layout']['category']) - 4)
-                if len(info['layout']['category']) > 4 else '')
-        out.append('folders : %s%s hold enough packages to be' % (names, more))
-        out.append('          categories rather than mods. Bisecting names the '
-                   'folder, not')
-        out.append('          the mod inside it.')
+    amb = info['layout'].get('ambiguous') or []
+    if amb:
+        names = ', '.join(amb[:4])
+        more = ' and %d more' % (len(amb) - 4) if len(amb) > 4 else ''
+        out.append('check   : %s%s hold loose packages AND' % (names, more))
+        out.append('          subfolders, so each is read as one mod. If any '
+                   'is really a')
+        out.append('          category, bisecting it names the folder rather '
+                   'than what is')
+        out.append('          inside. `bisect_mods.py plan --files` shows what '
+                   'each one covers.')
     return out
