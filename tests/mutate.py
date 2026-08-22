@@ -145,6 +145,23 @@ MUTATIONS += [
      "    return sorted(rels, key=lambda r: r.replace(os.sep, '/'))",
      'test_case_does_not_decide_the_winner'),
 
+    ('unknown-field-silent: a mistyped field matching nothing instead of '
+     'erroring',
+     f'{DOCTOR}/rquery.py',
+     "            if field not in self.schema:\n"
+     "                raise QueryError(",
+     "            if field not in self.schema:\n"
+     "                return ('cmp', field, op, nxt[1])\n"
+     "            if False:\n"
+     "                raise QueryError(",
+     'test_an_unknown_field_is_an_error'),
+
+    ('absent-is-excluded: a negated field dropping rows that lack it',
+     f'{DOCTOR}/rquery.py',
+     "        return op == '!='",
+     "        return False",
+     'test_not_equals_includes_rows_that_omit_the_field'),
+
     ('keep-list collision: a search term that also selects a mod to keep',
      f'{DOCTOR}/apply_plan.py',
      "        if n >= MIN_HITS and not any(c.lower() in k for k in keep_lower)}",

@@ -270,6 +270,7 @@ protect — a containment fix that fails open is worse than none.
 py scripts/evidence.py         # every diagnostic artifact, worth-reading first
 py scripts/bisect_mods.py      # isolate what breaks a load, without false clears
 py scripts/install.py          # library: managed or manual, and what the undo depends on
+py scripts/rquery.py           # library: the query language every HTML report takes
 py scripts/holdlog.py          # journalled move/restore; status and restore stand alone
 py scripts/deep_scan.py        # full audit -> report.json
 py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy

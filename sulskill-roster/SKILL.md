@@ -91,6 +91,69 @@ filled up and which nobody ever moved into, every household searchable. `--out`
 is required: the page is about one person's world and does not belong next to
 the code.
 
+## Ask the page a question
+
+Every report takes a query language (`sulskill-doctor/scripts/rquery.py`, and
+its page-side twin in `report_style.QUERY_JS`). One line, GitHub-search shaped:
+
+```bash
+py scripts/save_report.py --query 'size:1 gender:female -world:Windenburg'
+py scripts/save_report.py --fields          # what can be asked, with examples
+```
+
+```
+field:value     substring on text, equality on numbers
+field=value     exact
+field>N  <N  >=N  <=N  !=      ordering, numbers only
+-term  NOT term  !term         negation
+a b             both (implicit AND)
+a OR b          either;  ( ) to group
+"two words"     a value with spaces
+bare word       searches name, member, world, lot
+```
+
+A field whose value is a list matches if **any** element does, which is what
+makes `gender:female` mean *somebody here is female* rather than requiring a
+household to be female. Fields for the save report: `name world lot creator
+member gender age species funds size people pets housed`.
+
+**Two rules that stop it lying.** An unknown field is an **error**, not an empty
+result — those look identical and people read the second as "there are none of
+those in my save". And an absent value still matches a negation, so
+`-world:Windenburg` keeps the 73 households that have no world at all rather
+than silently dropping 40% of the save.
+
+### Writing the query for somebody
+
+This is the point. Most players will never type `size:1 gender:female`; they
+will ask *"who lives alone?"*. **Translate the question, then hand back a
+link** — the page reads `?q=` on load, so a URL opens directly on the answer:
+
+```
+save.html?q=size%3A1%20gender%3Afemale%20-world%3AWindenburg
+```
+
+Build it with `urllib.parse.quote`, or run `--query` and give them the answer in
+the terminal. Both use the same engine on the same rows, so they cannot
+disagree.
+
+| they ask | you write |
+| --- | --- |
+| who lives alone? | `size:1` |
+| any single women outside Windenburg? | `size:1 gender:female -world:Windenburg` |
+| which families are broke? | `funds<1000` |
+| who has pets? | `pets>0` |
+| show me the cat people | `species:cat` |
+| big rich households | `size>4 funds>=50000` |
+| anyone homeless? | `-housed:true` |
+| the Goths, exactly | `name=Goth` |
+| elders living with an animal | `age:elder pets>0` |
+
+**Check it before you hand it over.** Run `--query` first: if it errors, the
+error names the valid fields, and if it returns nothing that is worth saying
+rather than sending somebody to an empty page. A query is a claim about their
+save like any other on that page.
+
 `savegame.py` is the reader. There is **no published schema**, so nothing in its
 field map is quoted from one and nothing is guessed either — each field was
 fixed by reading real saves and then checked in a way that could fail:

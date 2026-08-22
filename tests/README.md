@@ -39,6 +39,7 @@ diff. Most of the bugs below shipped, and were found by accident:
 | `test_evidence.py` | a diagnostic file that exists and is never read. One investigation ran twenty-five bisect rounds while `mc_lastexception.html` sat in the Mods folder naming the culprit twenty-one times — missed because the reader worked from a remembered list of artifacts, so a file not on the list did not exist. The assertions that matter are therefore about the files the tool does *not* recognise; a longer allowlist fixes one investigation, reporting the unknown fixes the next one |
 | `test_bisect_mods.py` | a false exoneration. Clearing the mods you just disabled because the round still failed is sound only with exactly one culprit; with two, every half fails, each round clears innocent and guilty alike, and the search narrows into a region that never held the answer. Nothing errors and the rounds keep halving. Also an exception file from a previous session scored as this round's result, and one read mid-write scored as clean |
 | `test_simdata.py` | a name hash computed the wrong way, which returns a plausible number and writes a resource the game never finds under the name it claims — `fnv64` shipped as FNV-1a over the original casing, wrong twice, with zero callers and a docstring inviting one. Also the format's null pointer (`0x80000000`, not `-1`) read as an ordinary offset, resolving ~2 GB below the buffer: table names decoded as fragments and schema pointers landed outside the resource, and nothing raised |
+| `test_rquery.py` | a query that answers a slightly different question than the one asked, confidently. Precedence is the quiet one — `a b OR c` is `(a AND b) OR c`, and a left-to-right scan reads it as `a AND (b OR c)` and returns a plausible wrong list. Also an unknown field matching nothing rather than erroring (indistinguishable from an honest empty result), and a negated field dropping rows that have no value at all, which on a real save silently removes 40% of it |
 | `test_classify_adult.py` | a mod that lands in no bucket: the counts still print, the plan still claims to cover everything, and the mod is never named — so it stays enabled in a profile built to exclude it, and the first sign is somebody seeing it in the game. Also a derived search term that selects something on the *keep* list, which tells you to Ctrl+A a block with a keeper in it and looks no different when it does |
 
 ### Written from the design, not from the code
@@ -95,6 +96,13 @@ assertion has to name something only the code under test can produce: the
 guard's own words, and the fact that it returns before journalling, so a
 refusal leaves no `unhold` record while reaching the rename always writes an
 intent first.
+
+A fixture that could not tell right from wrong turned up again while writing
+the query language, which makes seven of the escapes recorded here. The
+absent-value branch had a test pointed straight at it and every fixture row set
+the field to the empty string - a value, just an empty one - so the branch was
+never reached and breaking it changed nothing. Rows that omit the key entirely
+were needed. The assertion had been right the whole time.
 
 Each group was also checked by mutation - break the property deliberately,
 confirm that group fails and the others do not. Fourteen mutations for the groups above,

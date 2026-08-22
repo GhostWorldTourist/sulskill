@@ -217,6 +217,147 @@ function wireSearch(q, apply){
 BYLINE = 'from the installed mods themselves'
 
 
+# The page-side twin of rquery.py. Same grammar, same semantics, same error
+# behaviour - an unknown field throws rather than quietly matching nothing.
+# Every report gets it, so a query written for one page reads the same on
+# another; what differs is only the schema each page declares.
+QUERY_JS = r"""
+function rqTokenize(text){
+  const out = []; let i = 0;
+  const re = /^(?:(\()|(\))|(>=|<=|!=|:|=|>|<)|("[^"]*"|'[^']*')|([^\s()"':=<>!&|-][^\s()"':=<>!]*|[-!&|]+))/;
+  while(i < text.length){
+    if(/\s/.test(text[i])){ i++; continue; }
+    const m = re.exec(text.slice(i));
+    if(!m) throw new Error('cannot read "' + text[i] + '"');
+    i += m[0].length;
+    if(m[1]) out.push(['lparen', m[1]]);
+    else if(m[2]) out.push(['rparen', m[2]]);
+    else if(m[3]) out.push(['op', m[3]]);
+    else if(m[4]) out.push(['value', m[4].slice(1, -1)]);
+    else {
+      const w = m[5], u = w.toUpperCase();
+      if(u === 'AND' || u === 'OR' || u === 'NOT') out.push([u.toLowerCase(), w]);
+      else if(w === '&' || w === '&&') out.push(['and', w]);
+      else if(w === '|' || w === '||') out.push(['or', w]);
+      else if(w === '-' || w === '!') out.push(['not', w]);
+      else out.push(['value', w]);
+    }
+  }
+  return out;
+}
+
+function rqParse(text, schema){
+  const t = rqTokenize(text || ''); let i = 0;
+  const peek = () => i < t.length ? t[i] : [null, null];
+  const take = () => t[i++] || [null, null];
+  function parseOr(){
+    let n = parseAnd();
+    while(peek()[0] === 'or'){ take(); n = ['or', n, parseAnd()]; }
+    return n;
+  }
+  function parseAnd(){
+    let n = parseUnary();
+    for(;;){
+      const k = peek()[0];
+      if(k === 'and') take();
+      else if(k !== 'value' && k !== 'lparen' && k !== 'not') return n;
+      n = ['and', n, parseUnary()];
+    }
+  }
+  function parseUnary(){
+    if(peek()[0] === 'not'){ take(); return ['not', parseUnary()]; }
+    return parsePrimary();
+  }
+  function parsePrimary(){
+    const [kind, val] = take();
+    if(kind === 'lparen'){
+      const n = parseOr();
+      if(take()[0] !== 'rparen') throw new Error('missing )');
+      return n;
+    }
+    if(kind !== 'value') throw new Error('expected a term');
+    if(peek()[0] === 'op'){
+      const op = take()[1];
+      if(peek()[0] !== 'value') throw new Error(val + op + ' needs a value');
+      const want = take()[1];
+      const field = val.toLowerCase();
+      if(!(field in schema))
+        throw new Error('no field called "' + val + '". Try: '
+                        + Object.keys(schema).sort().join(', '));
+      // Refused here rather than while matching, so it is an error about the
+      // query instead of a run that quietly returns nothing.
+      if(['>','>=','<','<='].indexOf(op) >= 0 && schema[field] === 'text')
+        throw new Error(val + ' is text, so ' + op + ' does not mean anything '
+                        + 'on it. Use : for a substring or = for exact.');
+      return ['cmp', field, op, want];
+    }
+    return ['free', val];
+  }
+  if(!t.length) return ['all'];
+  const n = parseOr();
+  if(i < t.length) throw new Error('unexpected "' + t[i][1] + '"');
+  return n;
+}
+
+function rqNum(v){
+  const n = parseFloat(String(v).replace(/,/g, '').replace(/^[\u00A7$]/, ''));
+  return isNaN(n) ? null : n;
+}
+
+function rqValues(row, field){
+  const v = row[field];
+  if(v === undefined || v === null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+function rqOne(op, have, want, kind){
+  if(kind === 'number' || ['>', '>=', '<', '<='].indexOf(op) >= 0){
+    const a = rqNum(have), b = rqNum(want);
+    if(a === null || b === null) return false;
+    switch(op){
+      case ':': case '=': return a === b;
+      case '!=': return a !== b;
+      case '>': return a > b;   case '>=': return a >= b;
+      case '<': return a < b;   case '<=': return a <= b;
+    }
+    return false;
+  }
+  if(kind === 'bool'){
+    const wantTrue = ['1','true','yes','y'].indexOf(String(want).toLowerCase()) >= 0;
+    const got = !!have;
+    return (op === ':' || op === '=') ? got === wantTrue : got !== wantTrue;
+  }
+  const a = String(have).toLowerCase(), b = String(want).toLowerCase();
+  if(op === ':') return a.indexOf(b) >= 0;
+  if(op === '=') return a === b;
+  if(op === '!=') return a !== b;
+  throw new Error(op + ' does not work on text');
+}
+
+function rqMatch(node, row, schema, free){
+  switch(node[0]){
+    case 'all': return true;
+    case 'and': return rqMatch(node[1],row,schema,free) && rqMatch(node[2],row,schema,free);
+    case 'or':  return rqMatch(node[1],row,schema,free) || rqMatch(node[2],row,schema,free);
+    case 'not': return !rqMatch(node[1],row,schema,free);
+    case 'free': {
+      const want = node[1].toLowerCase();
+      for(const f of free)
+        for(const v of rqValues(row, f))
+          if(String(v).toLowerCase().indexOf(want) >= 0) return true;
+      return false;
+    }
+  }
+  const [, field, op, want] = node;
+  const got = rqValues(row, field);
+  // An absent value matches a negative comparison and nothing else, so
+  // -world:Windenburg includes the households that have no world at all.
+  if(!got.length) return op === '!=';
+  return got.some(v => rqOne(op, v, want, schema[field]));
+}
+"""
+
+
 def bar(title, placeholder, chips_html, byline=BYLINE):
     """The sticky header: plumbob, name, SulSkill credit, live count, search.
 

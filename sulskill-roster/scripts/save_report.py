@@ -28,7 +28,28 @@ import sys
 
 import savegame
 import report_style
+import rquery
 
+
+# What a query may ask about. The page and `--query` share this, so a query
+# that works in one works in the other - and an unknown field is an error in
+# both rather than a silent empty result.
+SCHEMA = {
+    'name': rquery.TEXT,        # household name
+    'world': rquery.TEXT,
+    'lot': rquery.TEXT,
+    'creator': rquery.TEXT,
+    'member': rquery.LIST,      # any Sim in it, by name
+    'gender': rquery.LIST,      # any member's gender
+    'age': rquery.LIST,         # any member's life stage
+    'species': rquery.LIST,     # any member's species
+    'funds': rquery.NUMBER,
+    'size': rquery.NUMBER,      # everybody, pets included
+    'people': rquery.NUMBER,
+    'pets': rquery.NUMBER,
+    'housed': rquery.BOOL,
+}
+FREE_FIELDS = ('name', 'member', 'world', 'lot')
 
 CHIPS = """
       <button class="chip" id="f-housed" aria-pressed="false">Housed</button>
@@ -38,7 +59,8 @@ CHIPS = """
         <input type="range" id="f-wealth" min="0" max="__MAXFUNDS__"
                step="__STEP__" value="0" aria-label="Minimum household funds">
       </label>
-      <button class="chip" id="f-clear" aria-pressed="false">Reset</button>"""
+      <button class="chip" id="f-clear" aria-pressed="false">Reset</button>
+      <p class="qerr" id="qerr" hidden></p>"""
 
 EXTRA_CSS = r"""
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
@@ -90,6 +112,18 @@ h2 small{font-weight:400;font-size:13px;color:var(--ink-2);margin-left:8px}
   box-shadow:inset 3px 0 0 var(--plumbob)}
 .rows header.wrow{cursor:default}
 .rows header.wrow:hover{background:var(--panel-2)}
+/* In the sticky bar, not in the page body: an error about what you are
+   typing has to be visible from where you are typing it. */
+.qerr{flex-basis:100%;margin:2px 0 0;padding:8px 13px;border-radius:9px;
+  font-size:13.5px;background:var(--cheat-wash);color:var(--cheat);
+  border:1px solid var(--cheat)}
+.qerr[hidden]{display:none}
+.qerr code{background:transparent;padding:0}
+.qhint{margin:0 0 14px;font-size:13px;color:var(--soft)}
+.qhint b{color:var(--ink-2);font-weight:600}
+.qhint code{background:var(--panel-3);padding:1px 5px;border-radius:4px;
+  cursor:pointer}
+.qhint code:hover{background:var(--plumbob-wash);color:var(--plumbob-ink)}
 .ok{color:var(--plumbob-ink)}
 .bad{color:var(--cheat)}
 """
@@ -104,38 +138,58 @@ h2 small{font-weight:400;font-size:13px;color:var(--ink-2);margin-left:8px}
 # whole block and silently leaves the page with no list on it.
 SCRIPT = r"""
 const HH = __DATA__;
+const SCHEMA = __SCHEMA__;
+const FREE = __FREE__;
+const EXAMPLES = __EXAMPLES__;
 const list = document.getElementById('list');
 const q = document.getElementById('q');
+const qerr = document.getElementById('qerr');
 const cHoused = document.getElementById('f-housed');
 const cNoHome = document.getElementById('f-unhoused');
 const wealth = document.getElementById('f-wealth');
 const wealthOut = document.getElementById('f-wealthout');
-let world = null;                    // set by clicking a neighbourhood row
+let world = null;
 
-function money(n){ return '§' + n.toLocaleString(); }
+function money(n){ return '\u00A7' + n.toLocaleString(); }
 
 function render(){
-  const term = (q.value||'').toLowerCase().trim();
+  const text = (q.value || '').trim();
+  let node = ['all'];
+  qerr.hidden = true;
+  if(text){
+    try {
+      node = rqParse(text, SCHEMA);
+    } catch (e) {
+      // Say what is wrong and show NOTHING, rather than falling back to a
+      // plain-text search: a query with a typo that silently degrades into a
+      // different question is worse than one that refuses.
+      qerr.hidden = false;
+      qerr.innerHTML = '<strong>That query did not parse.</strong> '
+        + esc(e.message);
+      list.innerHTML = '';
+      document.getElementById('count').textContent = 'query error';
+      document.getElementById('empty').hidden = true;
+      return;
+    }
+  }
   const wantHoused = on(cHoused), wantNoHome = on(cNoHome);
   const floor = Number(wealth.value) || 0;
   let rows = '', n = 0;
   for(const h of HH){
-    if(wantHoused && !h.w) continue;
-    if(wantNoHome && h.w) continue;
-    if(world !== null && h.w !== world) continue;
-    if(h.f < floor) continue;
-    if(term && !(h.n.toLowerCase().includes(term)
-      || (h.w||'').toLowerCase().includes(term)
-      || (h.l||'').toLowerCase().includes(term)
-      || h.m.some(x => x.toLowerCase().includes(term)))) continue;
+    if(wantHoused && !h.housed) continue;
+    if(wantNoHome && h.housed) continue;
+    if(world !== null && h.world !== world) continue;
+    if(h.funds < floor) continue;
+    if(!rqMatch(node, h, SCHEMA, FREE)) continue;
     n++;
-    rows += '<div class="row hrow"><div><div class="desc">' + esc(h.n)
-      + '</div><div class="name muted">' + esc(h.m.join(', ') || 'nobody')
+    rows += '<div class="row hrow"><div><div class="desc">' + esc(h.name)
+      + '</div><div class="name muted">' + esc(h.member.join(', ') || 'nobody')
       + '</div></div><div class="name">'
-      + (h.w ? esc(h.l) + '<br><span class="muted">' + esc(h.w) + '</span>'
-             : '<span class="muted">no home</span>')
-      + '</div><div class="num">' + h.c + '</div>'
-      + '<div class="num">' + money(h.f) + '</div></div>';
+      + (h.housed ? esc(h.lot) + '<br><span class="muted">' + esc(h.world)
+                    + '</span>'
+                  : '<span class="muted">no home</span>')
+      + '</div><div class="num">' + h.size + '</div>'
+      + '<div class="num">' + money(h.funds) + '</div></div>';
   }
   list.innerHTML = n ? ('<div class="card"><div class="rows">'
     + '<header class="row hrow"><div>Household</div><div>Lives at</div>'
@@ -146,7 +200,7 @@ function render(){
     + (world !== null ? ' in ' + world : '');
   document.getElementById('empty').hidden = n > 0;
   document.getElementById('emptyq').textContent =
-    term ? '“' + term + '”' : '';
+    text ? '\u201C' + text + '\u201D' : '';
 }
 
 // Clicking a neighbourhood filters the list to it; clicking it again clears.
@@ -171,8 +225,6 @@ for(const row of document.querySelectorAll('.wrow[data-world]')){
 function syncWealth(){ wealthOut.textContent = money(Number(wealth.value)||0); }
 wealth.addEventListener('input', () => { syncWealth(); render(); });
 
-// Housed and No home are opposites; letting both latch would only ever show
-// an empty list, which reads as a broken page rather than a silly filter.
 wireChip(cHoused, () => {
   if(on(cHoused)) cNoHome.setAttribute('aria-pressed','false');
   render();
@@ -190,6 +242,19 @@ document.getElementById('f-clear').addEventListener('click', () => {
   q.value = ''; render();
 });
 wireSearch(q, render);
+
+// Clicking an example loads it, so the language is discoverable by poking at
+// it rather than by reading a grammar.
+for(const el of document.querySelectorAll('.qhint code')){
+  el.addEventListener('click', () => {
+    q.value = el.textContent; q.focus(); render();
+  });
+}
+
+// ?q=... so an agent can hand somebody a link that opens on the answer.
+const fromUrl = new URLSearchParams(location.search).get('q');
+if(fromUrl){ q.value = fromUrl; }
+
 syncWealth();
 render();
 """
@@ -360,6 +425,45 @@ def provenance(save, complaints):
 </div>"""
 
 
+def row_of(save, h):
+    """One household as the query engine sees it.
+
+    The page and `--query` both read this, so an answer given in the terminal
+    and a link handed to somebody cannot disagree about what a field means.
+    """
+    members = h['members']
+    pets = [s for s in members if s['species'] != savegame.HUMAN]
+    return {
+        'name': h['name'] or '(unnamed)',
+        'world': (h['world'] or {}).get('name', '') if h['world'] else '',
+        'lot': (h['lot'] or {}).get('name', '') if h['lot'] else '',
+        'creator': h['creator'] or '',
+        'member': sorted(s['name'] for s in members if s['name']),
+        'gender': sorted({save.gender_name(s) for s in members}),
+        'age': sorted({save.age_name(s) for s in members}),
+        'species': sorted({save.species_name(s) for s in members}),
+        'funds': int(h['funds'] or 0),
+        'size': len(members),
+        'people': len(members) - len(pets),
+        'pets': len(pets),
+        'housed': bool(h['lot']),
+    }
+
+
+def query_hint():
+    """A few real questions in the query language, clickable.
+
+    Discoverable by poking rather than by reading a grammar - and they are the
+    same EXAMPLES the tests parse and the terminal accepts, so the page cannot
+    advertise a syntax the engine does not take.
+    """
+    bits = ' &nbsp; '.join('<code>%s</code>' % html.escape(qs)
+                           for _label, qs in rquery.EXAMPLES[:4])
+    return ('<p class="qhint"><b>Ask it anything:</b> %s '
+            '&nbsp;&mdash;&nbsp; fields: %s</p>'
+            % (bits, ', '.join(sorted(SCHEMA))))
+
+
 def build(save):
     complaints = save.verify()
     housed, unhoused = save.housed(), save.unhoused()
@@ -395,16 +499,9 @@ def build(save):
     chips = (CHIPS.replace('__MAXFUNDS__', str(top))
                   .replace('__STEP__', str(step)))
 
-    data = [{
-        'n': h['name'] or '(unnamed)',
-        'c': len(h['members']),
-        'f': int(h['funds'] or 0),
-        'w': (h['world'] or {}).get('name', '') if h['world'] else '',
-        'l': (h['lot'] or {}).get('name', '') if h['lot'] else '',
-        'm': sorted(s['name'] for s in h['members'] if s['name']),
-    } for h in sorted(save.households,
-                      key=lambda x: (-len(x['members']),
-                                     (x['name'] or '').lower()))]
+    data = [row_of(save, h) for h in sorted(
+        save.households,
+        key=lambda x: (-len(x['members']), (x['name'] or '').lower()))]
 
     body = (
         '<div class="stats">' + stats + '</div>'
@@ -415,6 +512,7 @@ def build(save):
         + '<h2>The neighbourhoods <small>busiest first</small></h2>'
         + world_rows(save)
         + '<h2>Every household <small>search or filter above</small></h2>'
+        + query_hint()
         + '<div id="list"></div>'
         + provenance(save, complaints))
 
@@ -426,24 +524,40 @@ def build(save):
 
     return report_style.page(
         title='Your Save',
-        placeholder='Search households, Sims, worlds, lots…',
+        placeholder='size:1 gender:female -world:Windenburg  —  or just a name…',
         chips_html=chips,
         note_html=note,
         body_html=body,
         footer_html=footer,
-        script=SCRIPT.replace('__DATA__', json.dumps(data,
-                                                     ensure_ascii=False)),
+        script=(report_style.QUERY_JS + SCRIPT.replace('__DATA__',
+                               json.dumps(data, ensure_ascii=False))
+                .replace('__SCHEMA__', json.dumps(SCHEMA))
+                .replace('__FREE__', json.dumps(list(FREE_FIELDS)))
+                .replace('__EXAMPLES__',
+                         json.dumps([list(e) for e in
+                                     rquery.EXAMPLES]))),
         extra_css=EXTRA_CSS,
         byline='from your save file'), complaints
 
 
 def main(argv=None):
+    # The simoleon sign is the whole point of printing money, and a console
+    # that cannot encode it mangles every figure. Ask for UTF-8 and carry on if
+    # the stream will not take it.
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):                       # noqa: BLE001
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--out', help='where to write the page (required)')
     ap.add_argument('--slot', help='which save; default is the most recent')
     ap.add_argument('--saves', help='the saves folder, if it is not the usual')
     ap.add_argument('--list', action='store_true',
                     help='list the saves and exit')
+    ap.add_argument('--query', help='filter with the report query language; '
+                                    'prints the matches')
+    ap.add_argument('--fields', action='store_true',
+                    help='what a query can ask about, with examples')
     a = ap.parse_args(argv)
 
     found = savegame.find_saves(a.saves)
@@ -460,7 +574,17 @@ def main(argv=None):
                      when.strftime('%Y-%m-%d %H:%M')))
         return 0
 
-    if not a.out:
+    if a.fields:
+        print('fields a query can ask about:')
+        for f in sorted(SCHEMA):
+            print('   %-10s %s' % (f, SCHEMA[f]))
+        print('free text: %s' % ', '.join(FREE_FIELDS))
+        print('')
+        for label, qs in rquery.EXAMPLES:
+            print('   %-50s %s' % (qs, label))
+        return 0
+
+    if not a.out and not a.query:
         print('--out is required: this page is about one person\'s save and '
               'does not belong\nnext to the code.', file=sys.stderr)
         return 2
@@ -475,6 +599,25 @@ def main(argv=None):
         path = want[0]
 
     save = savegame.Save(path)
+
+    if a.query:
+        rows = [row_of(save, h) for h in save.households]
+        try:
+            hits, _node = rquery.run(rows, a.query, SCHEMA, FREE_FIELDS)
+        except rquery.QueryError as exc:
+            print('bad query: %s' % exc, file=sys.stderr)
+            return 2
+        print('%d of %d households match' % (len(hits), len(rows)))
+        for r in sorted(hits, key=lambda x: (-x['size'], x['name'].lower())):
+            where = ('%s, %s' % (r['lot'], r['world'])) if r['housed'] \
+                else 'no home'
+            print('   %-26s %-32s %2d  %10s'
+                  % (r['name'][:26], where[:32], r['size'], money(r['funds'])))
+            if r['member']:
+                print('      %s' % ', '.join(r['member']))
+        if not a.out:
+            return 0
+
     page, complaints = build(save)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or '.', exist_ok=True)
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
