@@ -564,6 +564,26 @@ def build(save):
         byline='from your save file'), complaints
 
 
+def _join_query(argv):
+    """`--query -housed:true` -> `--query=-housed:true`.
+
+    argparse reads any value starting with `-` as another option, so a query
+    beginning with a negation fails with a usage message and no explanation -
+    and `-housed:true` is in the documented examples. Rewriting it here is the
+    smallest fix that makes what the docs say actually run. Only `--query` is
+    touched, and only when a value follows it.
+    """
+    out, i = [], 0
+    while i < len(argv):
+        if argv[i] == '--query' and i + 1 < len(argv):
+            out.append('--query=' + argv[i + 1])
+            i += 2
+            continue
+        out.append(argv[i])
+        i += 1
+    return out
+
+
 def main(argv=None):
     # The simoleon sign is the whole point of printing money, and a console
     # that cannot encode it mangles every figure. Ask for UTF-8 and carry on if
@@ -582,7 +602,8 @@ def main(argv=None):
                                     'prints the matches')
     ap.add_argument('--fields', action='store_true',
                     help='what a query can ask about, with examples')
-    a = ap.parse_args(argv)
+    a = ap.parse_args(_join_query(
+        sys.argv[1:] if argv is None else list(argv)))
 
     found = savegame.find_saves(a.saves)
     if not found:

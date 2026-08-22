@@ -504,6 +504,40 @@ class ThePage(unittest.TestCase):
             self.assertIn(name, self.html)
 
 
+class TheCommandLineTakesAQueryThatStartsWithAMinus(unittest.TestCase):
+    """argparse reads any value beginning with `-` as another option, so
+    `--query -housed:true` died with a usage message and no explanation - and
+    that exact string is one of the documented examples. The docs were
+    advertising something that could not be run."""
+
+    def rig(self):
+        tmp = tempfile.mkdtemp()
+        write_save(tmp, a_world())
+        return tmp
+
+    def ask(self, query):
+        import io
+        tmp = self.rig()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = save_report.main(['--saves', tmp, '--query', query])
+        return code, buf.getvalue()
+
+    def test_a_leading_negation_is_not_read_as_an_option(self):
+        code, out = self.ask('-housed:true')
+        self.assertEqual(code, 0, out)
+        self.assertIn('households match', out)
+
+    def test_it_agrees_with_the_plain_boolean_form(self):
+        _c1, a = self.ask('-housed:true')
+        _c2, b = self.ask('housed:false')
+        self.assertEqual(a.splitlines()[0], b.splitlines()[0])
+
+    def test_an_ordinary_query_still_works(self):
+        code, out = self.ask('size:1')
+        self.assertEqual(code, 0, out)
+
+
 class TheCommandRefusesToWriteSomewhereSilly(unittest.TestCase):
 
     def test_out_is_required(self):

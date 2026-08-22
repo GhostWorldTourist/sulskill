@@ -105,12 +105,23 @@ py scripts/save_report.py --fields          # what can be asked, with examples
 field:value     substring on text, equality on numbers
 field=value     exact
 field>N  <N  >=N  <=N  !=      ordering, numbers only
--term  NOT term  !term         negation
+field:*         has a value at all
 a b             both (implicit AND)
 a OR b          either;  ( ) to group
+-X  NOT X  !X   negation, where X is a whole term
 "two words"     a value with spaces
 bare word       searches name, member, world, lot
 ```
+
+**There is only one kind of term.** `-world:Windenburg` is not a different sort
+of field from `size:1` — the minus is an *operator* that negates a whole term,
+so it reads `NOT (world:Windenburg)`. The value always comes with the field;
+`-world` on its own is not something you can write. Negation applies to groups
+too: `-(world:Windenburg OR world:Tartosa)`.
+
+For booleans prefer the plain form — `housed:false` rather than
+`-housed:true`. They mean the same thing, and the first does not look like a
+third kind of syntax.
 
 A field whose value is a list matches if **any** element does, which is what
 makes `gender:female` mean *somebody here is female* rather than requiring a
@@ -170,7 +181,7 @@ disagree.
 | who has pets? | `pets>0` |
 | show me the cat people | `species:cat` |
 | big rich households | `size>4 funds>=50000` |
-| anyone homeless? | `-housed:true` |
+| anyone homeless? | `housed:false` |
 | the Goths, exactly | `name=Goth` |
 | elders living with an animal | `age:elder pets>0` |
 

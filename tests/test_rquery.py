@@ -312,6 +312,41 @@ class ItSaysWhenItAnsweredSomethingElse(unittest.TestCase):
         self.assertEqual(notes('-world:Windenburg', rows), [])
 
 
+class TheMinusIsAnOperatorNotPartOfAField(unittest.TestCase):
+    """Asked by somebody reading the examples: why `size:1` but `-world`?
+
+    Because there is no `-world`. The minus negates a whole TERM, so
+    `-world:Windenburg` is `NOT (world:Windenburg)` and has exactly the shape
+    `size:1` has. The confusion came from the tool's own output, which said
+    `"not world" is true of them` and dropped the value - teaching a syntax
+    that does not exist."""
+
+    def test_a_negated_term_is_the_same_as_not_of_that_term(self):
+        self.assertEqual(run('-world:Windenburg'),
+                         run('NOT world:Windenburg'))
+
+    def test_the_note_quotes_the_whole_term_not_the_bare_field(self):
+        got = ' '.join(notes('size:1 gender:female -world:Windenburg'))
+        self.assertIn('-world:Windenburg', got)
+        self.assertNotIn('"not world"', got)
+
+    def test_the_note_re_quotes_a_value_that_needs_quoting(self):
+        """Otherwise the note prints something that would not parse if typed
+        back in, which is worse than saying nothing."""
+        # Enough worldless rows for them to be a MAJORITY of the result, or
+        # the note does not fire at all and the assertion is being made about
+        # an empty string. ROWS has one; three more make four of seven.
+        rows = ROWS + [hh('Ghost%d' % i, world='') for i in range(3)]
+        got = ' '.join(notes('-world:"Willow Creek"', rows))
+        self.assertIn('-world:"Willow Creek"', got)
+
+    def test_negating_a_boolean_matches_the_plain_form(self):
+        """`-housed:true` and `housed:false` are the same question. The plain
+        form is the documented one now, because negating a boolean reads like
+        a third kind of syntax when it is not."""
+        self.assertEqual(run('-housed:true'), run('housed:false'))
+
+
 class TheExamplesAreReal(unittest.TestCase):
     """The page prints these as clickable hints and the terminal accepts them.
     A syntax the docs advertise and the engine rejects cannot survive this."""

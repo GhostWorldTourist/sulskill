@@ -292,7 +292,11 @@ def _hits(rows, field, op, want, kind):
 
 
 def _negated_fields(node, negated=False):
-    """Fields compared under a NOT, which is where absent values surprise."""
+    """(field, term-as-written) for comparisons under a NOT.
+
+    The term comes back with the field because that is what the note has to
+    quote - `-world` on its own is not something anybody can type.
+    """
     out = set()
     if node[0] == 'not':
         out |= _negated_fields(node[1], not negated)
@@ -300,7 +304,10 @@ def _negated_fields(node, negated=False):
         for child in node[1:]:
             out |= _negated_fields(child, negated)
     elif node[0] == 'cmp' and negated:
-        out.add(node[1])
+        _c, field, op, want = node
+        shown = '%s%s%s' % (field, op, ('"%s"' % want) if ' ' in str(want)
+                            else want)
+        out.add((field, '-' + shown))
     return out
 
 
@@ -353,14 +360,18 @@ def diagnose(rows, node, schema, matched):
                                                      for v in sorted(column))
         notes.append(msg)
 
-    for field in sorted(_negated_fields(node)):
+    for field, term in sorted(_negated_fields(node)):
         blank = [r for r in matched if not [v for v in _values(r, field)
                                             if str(v).strip()]]
         if blank and len(blank) * 2 >= len(matched):
+            # Quote the WHOLE term. Saying `"not world" is true of them` reads
+            # as though `-world` were a thing you can write, and it is not -
+            # the minus negates an entire term, so the value has to come with
+            # it or the note teaches a syntax that does not exist.
             notes.append(
-                '%d of these %d have no %s at all, and "not %s" is true of '
-                'them. Add %s:* to require one.'
-                % (len(blank), len(matched), field, field, field))
+                '%d of these %d have no %s at all, and %s is true of them. '
+                'Add %s:* to require one.'
+                % (len(blank), len(matched), field, term, field))
     return notes
 
 
@@ -382,7 +393,7 @@ EXAMPLES = [
      'size:1 gender:female -world:Windenburg'),
     ('households with more than four Sims', 'size>4'),
     ('anyone poorer than 1000 simoleons', 'funds<1000'),
-    ('households with no home at all', '-housed:true'),
+    ('households with no home at all', 'housed:false'),
     ('single women, and only ones who actually live somewhere',
      'size:1 gender:female world:*'),
     ('cats or dogs', 'species:cat OR species:dog'),

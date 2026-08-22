@@ -366,7 +366,11 @@ function rqNegated(node, neg, out){
   if(node[0] === 'not') rqNegated(node[1], !neg, out);
   else if(node[0] === 'and' || node[0] === 'or'){
     for(let i = 1; i < node.length; i++) rqNegated(node[i], neg, out);
-  } else if(node[0] === 'cmp' && neg) out.add(node[1]);
+  } else if(node[0] === 'cmp' && neg){
+    const want = String(node[3]);
+    out.add(node[1] + '|-' + node[1] + node[2]
+            + (want.indexOf(' ') >= 0 ? '"' + want + '"' : want));
+  }
   return out;
 }
 
@@ -410,12 +414,13 @@ function rqDiagnose(rows, node, schema, matched){
              + column.slice().sort().map(v => '"'+v+'"').join(', ');
     notes.push(msg);
   }
-  for(const field of Array.from(rqNegated(node, false)).sort()){
+  for(const packed of Array.from(rqNegated(node, false)).sort()){
+    const [field, term] = packed.split('|');
     const blank = matched.filter(
       r => !rqValues(r, field).filter(v => String(v).trim()).length);
     if(blank.length && blank.length * 2 >= matched.length)
       notes.push(blank.length + ' of these ' + matched.length + ' have no '
-                 + field + ' at all, and "not ' + field + '" is true of them. '
+                 + field + ' at all, and ' + term + ' is true of them. '
                  + 'Add ' + field + ':* to require one.');
   }
   return notes;

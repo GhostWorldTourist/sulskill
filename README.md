@@ -120,7 +120,7 @@ py tests/run.py       # the suite
 py tests/mutate.py    # prove the suite can fail
 ```
 
-491 tests, standard library only, about fifteen seconds. They build synthetic mod installs, packages and save files in a temp directory, so they never touch your real library.
+498 tests, standard library only, about fifteen seconds. They build synthetic mod installs, packages and save files in a temp directory, so they never touch your real library.
 
 `tests/mutate.py` puts 16 real defects back one at a time and asserts that the test which owns each one fails. A suite that has only ever run against working code has not been shown to detect anything.
 
