@@ -334,6 +334,93 @@ function rqOne(op, have, want, kind){
   throw new Error(op + ' does not work on text');
 }
 
+function rqWalk(node, out){
+  out = out || [];
+  out.push(node);
+  for(let i = 1; i < node.length; i++){
+    const c = node[i];
+    if(Array.isArray(c) && typeof c[0] === 'string'
+       && ['and','or','not','cmp','free','all'].indexOf(c[0]) >= 0)
+      rqWalk(c, out);
+  }
+  return out;
+}
+
+function rqColumn(rows, field){
+  const seen = [];
+  for(const r of rows)
+    for(const v of rqValues(r, field))
+      if(seen.indexOf(v) < 0) seen.push(v);
+  return seen;
+}
+
+function rqHits(rows, field, op, want, kind){
+  for(const r of rows)
+    for(const v of rqValues(r, field))
+      if(rqOne(op, v, want, kind)) return true;
+  return false;
+}
+
+function rqNegated(node, neg, out){
+  out = out || new Set();
+  if(node[0] === 'not') rqNegated(node[1], !neg, out);
+  else if(node[0] === 'and' || node[0] === 'or'){
+    for(let i = 1; i < node.length; i++) rqNegated(node[i], neg, out);
+  } else if(node[0] === 'cmp' && neg) out.add(node[1]);
+  return out;
+}
+
+// Every one of these is a way a query answers a slightly different question
+// than the one asked while looking perfectly successful. See rquery.diagnose.
+function rqDiagnose(rows, node, schema, matched){
+  const notes = [];
+  for(const n of rqWalk(node)){
+    let pair = null;
+    if(n[0] === 'and' && n[1][0] === 'cmp' && n[2][0] === 'free')
+      pair = [n[1], n[2]];
+    else if(n[0] === 'and' && n[1][0] === 'and' && n[1][2][0] === 'cmp'
+            && n[2][0] === 'free')
+      pair = [n[1][2], n[2]];
+    if(!pair) continue;
+    const [, field, op, want] = pair[0];
+    const kind = schema[field];
+    if((kind !== 'text' && kind !== 'list') || (op !== ':' && op !== '='))
+      continue;
+    const joined = want + ' ' + pair[1][1];
+    if(rqHits(rows, field, op, joined, kind))
+      notes.push('did you mean ' + field + ':"' + joined + '"? As written, '
+                 + field + ':' + want + ' is one term and ' + pair[1][1]
+                 + ' is a separate word searched on its own.');
+  }
+  for(const n of rqWalk(node)){
+    if(n[0] !== 'cmp') continue;
+    const [, field, op, want] = n;
+    const kind = schema[field];
+    if((kind !== 'text' && kind !== 'list') || (op !== ':' && op !== '='))
+      continue;
+    if(want === '*') continue;
+    if(rqHits(rows, field, op, want, kind)) continue;
+    const column = rqColumn(rows, field).map(String).filter(Boolean);
+    const low = String(want).toLowerCase();
+    const near = column.filter(v => v.toLowerCase().indexOf(low) >= 0).slice(0,3);
+    let msg = 'nothing has ' + field + ' matching "' + want + '"';
+    if(near.length) msg += '. Closest: ' + near.map(v => '"'+v+'"').join(', ');
+    else if(column.length <= 12)
+      msg += '. This save has: '
+             + column.slice().sort().map(v => '"'+v+'"').join(', ');
+    notes.push(msg);
+  }
+  for(const field of Array.from(rqNegated(node, false)).sort()){
+    const blank = matched.filter(
+      r => !rqValues(r, field).filter(v => String(v).trim()).length);
+    if(blank.length && blank.length * 2 >= matched.length)
+      notes.push(blank.length + ' of these ' + matched.length + ' have no '
+                 + field + ' at all, and "not ' + field + '" is true of them. '
+                 + 'Add ' + field + ':* to require one.');
+  }
+  return notes;
+}
+
 function rqMatch(node, row, schema, free){
   switch(node[0]){
     case 'all': return true;
@@ -350,9 +437,17 @@ function rqMatch(node, row, schema, free){
   }
   const [, field, op, want] = node;
   const got = rqValues(row, field);
-  // An absent value matches a negative comparison and nothing else, so
-  // -world:Windenburg includes the households that have no world at all.
-  if(!got.length) return op === '!=';
+  if(want === '*'){
+    // "has one at all", which is how somebody excludes the rows that make a
+    // negation surprising.
+    const present = got.filter(v => String(v).trim());
+    return (op === ':' || op === '=') ? present.length > 0 : !present.length;
+  }
+  // An absent or blank value matches a negative comparison and nothing else,
+  // so -world:Windenburg includes the households that have no world at all.
+  // rqDiagnose says so when they dominate the result.
+  if(!got.length || !got.filter(v => String(v).trim()).length)
+    return op === '!=';
   return got.some(v => rqOne(op, v, want, schema[field]));
 }
 """

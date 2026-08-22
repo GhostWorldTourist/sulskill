@@ -55,12 +55,13 @@ CHIPS = """
       <button class="chip" id="f-housed" aria-pressed="false">Housed</button>
       <button class="chip" id="f-unhoused" aria-pressed="false">No home</button>
       <label class="wealth" for="f-wealth">Funds at least
-        <output id="f-wealthout">§0</output>
         <input type="range" id="f-wealth" min="0" max="__MAXFUNDS__"
                step="__STEP__" value="0" aria-label="Minimum household funds">
+        <output id="f-wealthout">§0</output>
       </label>
       <button class="chip" id="f-clear" aria-pressed="false">Reset</button>
-      <p class="qerr" id="qerr" hidden></p>"""
+      <p class="qerr" id="qerr" hidden></p>
+      <p class="qnote" id="qnote" hidden></p>"""
 
 EXTRA_CSS = r"""
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
@@ -102,10 +103,14 @@ h2 small{font-weight:400;font-size:13px;color:var(--ink-2);margin-left:8px}
   border-radius:4px}
 .wealth{display:flex;align-items:center;gap:8px;font-size:13px;
   color:var(--ink-2);white-space:nowrap}
-.wealth output{font-variant-numeric:tabular-nums;color:var(--ink);
-  min-width:74px;display:inline-block}
-.wealth input[type=range]{accent-color:var(--plumbob);width:150px;
-  vertical-align:middle}
+/* The readout sits AFTER the slider and hard against it. It used to be on the
+   far side of the label, a slider's width away from the thumb, and went
+   unnoticed while the thumb was being dragged - which is the one moment it is
+   for. */
+.wealth output{font-variant-numeric:tabular-nums;color:var(--plumbob-ink);
+  font-weight:600;min-width:72px;display:inline-block;text-align:left}
+.wealth input[type=range]{accent-color:var(--plumbob);width:140px;
+  vertical-align:middle;margin:0 2px 0 4px}
 .wrow{cursor:pointer}
 .wrow:hover{background:var(--panel-3)}
 .wrow[aria-pressed="true"]{background:var(--plumbob-wash);
@@ -118,6 +123,13 @@ h2 small{font-weight:400;font-size:13px;color:var(--ink-2);margin-left:8px}
   font-size:13.5px;background:var(--cheat-wash);color:var(--cheat);
   border:1px solid var(--cheat)}
 .qerr[hidden]{display:none}
+/* Not an error - the query ran. These are the ways it can succeed at
+   answering something else, so they sit beside the error and read calmer. */
+.qnote{flex-basis:100%;margin:2px 0 0;padding:8px 13px;border-radius:9px;
+  font-size:13.5px;background:var(--warn-wash);color:var(--warn);
+  border:1px solid var(--line-2)}
+.qnote[hidden]{display:none}
+.qnote b{color:var(--ink-2)}
 .qerr code{background:transparent;padding:0}
 .qhint{margin:0 0 14px;font-size:13px;color:var(--soft)}
 .qhint b{color:var(--ink-2);font-weight:600}
@@ -144,6 +156,7 @@ const EXAMPLES = __EXAMPLES__;
 const list = document.getElementById('list');
 const q = document.getElementById('q');
 const qerr = document.getElementById('qerr');
+const qnote = document.getElementById('qnote');
 const cHoused = document.getElementById('f-housed');
 const cNoHome = document.getElementById('f-unhoused');
 const wealth = document.getElementById('f-wealth');
@@ -156,6 +169,7 @@ function render(){
   const text = (q.value || '').trim();
   let node = ['all'];
   qerr.hidden = true;
+  qnote.hidden = true;
   if(text){
     try {
       node = rqParse(text, SCHEMA);
@@ -175,12 +189,14 @@ function render(){
   const wantHoused = on(cHoused), wantNoHome = on(cNoHome);
   const floor = Number(wealth.value) || 0;
   let rows = '', n = 0;
+  const queryHits = [];
   for(const h of HH){
     if(wantHoused && !h.housed) continue;
     if(wantNoHome && h.housed) continue;
     if(world !== null && h.world !== world) continue;
     if(h.funds < floor) continue;
     if(!rqMatch(node, h, SCHEMA, FREE)) continue;
+    queryHits.push(h);
     n++;
     rows += '<div class="row hrow"><div><div class="desc">' + esc(h.name)
       + '</div><div class="name muted">' + esc(h.member.join(', ') || 'nobody')
@@ -195,6 +211,14 @@ function render(){
     + '<header class="row hrow"><div>Household</div><div>Lives at</div>'
     + '<div class="num">Sims</div><div class="num">Funds</div></header>'
     + rows + '</div></div>') : '';
+  // Said about the query itself, against every row rather than the filtered
+  // set, so "nothing has world matching X" is about the save and not about
+  // whatever the chips happen to be hiding.
+  const notes = text ? rqDiagnose(HH, node, SCHEMA, queryHits) : [];
+  qnote.hidden = !notes.length;
+  if(notes.length)
+    qnote.innerHTML = '<b>Worth knowing.</b> '
+      + notes.map(esc).join(' &nbsp;·&nbsp; ');
   document.getElementById('count').textContent =
     n + ' of ' + HH.length + ' households'
     + (world !== null ? ' in ' + world : '');
@@ -603,11 +627,15 @@ def main(argv=None):
     if a.query:
         rows = [row_of(save, h) for h in save.households]
         try:
-            hits, _node = rquery.run(rows, a.query, SCHEMA, FREE_FIELDS)
+            hits, notes = rquery.run(rows, a.query, SCHEMA, FREE_FIELDS)
         except rquery.QueryError as exc:
             print('bad query: %s' % exc, file=sys.stderr)
             return 2
         print('%d of %d households match' % (len(hits), len(rows)))
+        for note in notes:
+            print('   NOTE  %s' % note)
+        if notes:
+            print('')
         for r in sorted(hits, key=lambda x: (-x['size'], x['name'].lower())):
             where = ('%s, %s' % (r['lot'], r['world'])) if r['housed'] \
                 else 'no home'

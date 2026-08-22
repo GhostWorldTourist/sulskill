@@ -47,6 +47,7 @@ browser, so a divergence shows up as a page whose own examples fail.
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import gate  # noqa: F401,E402  refusal gate - see _shared/gate.py
+import difflib
 import re
 
 
@@ -237,17 +238,141 @@ def match(node, row, schema, free_fields):
     _c, field, op, want = node
     kind = schema[field]
     got = _values(row, field)
-    if not got:
+    if want == '*':
+        # `field:*` means "has one at all", which is how somebody excludes the
+        # rows that make a negation surprising.
+        present = [v for v in got if str(v).strip()]
+        return bool(present) if op in (':', '=') else not present
+    if not got or not [v for v in got if str(v).strip()]:
         # An absent value matches a negative comparison and nothing else, so
         # `-world:Windenburg` includes the households with no world at all.
+        # `diagnose()` says so when they dominate the result.
         return op == '!='
     return any(_one(op, v, want, kind) for v in got)
 
 
+def _walk(node):
+    yield node
+    for child in node[1:]:
+        if isinstance(child, tuple) and child and isinstance(child[0], str) \
+                and child[0] in ('and', 'or', 'not', 'cmp', 'free', 'all'):
+            yield from _walk(child)
+
+
+def _cmps(node):
+    return [n for n in _walk(node) if n[0] == 'cmp']
+
+
+def _adjacent(node):
+    """(cmp, free) pairs written next to each other, which is what an unquoted
+    two-word value parses into: `world:Willow Creek` is `world:Willow` AND the
+    bare word `Creek`, silently a different question."""
+    out = []
+    for n in _walk(node):
+        if n[0] == 'and' and n[1][0] == 'cmp' and n[2][0] == 'free':
+            out.append((n[1], n[2]))
+        elif n[0] == 'and' and n[1][0] == 'and' and n[1][2][0] == 'cmp' \
+                and n[2][0] == 'free':
+            out.append((n[1][2], n[2]))
+    return out
+
+
+def _column(rows, field):
+    seen = []
+    for r in rows:
+        for v in _values(r, field):
+            if v not in seen:
+                seen.append(v)
+    return seen
+
+
+def _hits(rows, field, op, want, kind):
+    return any(_one(op, v, want, kind)
+               for r in rows for v in _values(r, field))
+
+
+def _negated_fields(node, negated=False):
+    """Fields compared under a NOT, which is where absent values surprise."""
+    out = set()
+    if node[0] == 'not':
+        out |= _negated_fields(node[1], not negated)
+    elif node[0] in ('and', 'or'):
+        for child in node[1:]:
+            out |= _negated_fields(child, negated)
+    elif node[0] == 'cmp' and negated:
+        out.add(node[1])
+    return out
+
+
+def diagnose(rows, node, schema, matched):
+    """Things worth saying about a query that ran without erroring.
+
+    Every one of these is a way a query answers a slightly different question
+    than the one asked while looking perfectly successful:
+
+      * a two-word value written without quotes, which parses as a one-word
+        match plus a loose word and can even return a plausible count
+      * a value that appears nowhere in that column, which returns zero and is
+        indistinguishable from an honest "you have none of those"
+      * a negated field where most of what came back has no value for it at
+        all - `-world:Windenburg` is true of every homeless household, and on
+        a real save they were 34 of the 41 rows returned
+    """
+    notes = []
+
+    for cmp_node, free_node in _adjacent(node):
+        _c, field, op, want = cmp_node
+        kind = schema.get(field)
+        if kind not in (TEXT, LIST) or op not in (':', '='):
+            continue
+        joined = '%s %s' % (want, free_node[1])
+        if _hits(rows, field, op, joined, kind):
+            notes.append(
+                'did you mean %s:"%s"? As written, %s:%s is one term and %s is '
+                'a separate word searched on its own.'
+                % (field, joined, field, want, free_node[1]))
+
+    for _c, field, op, want in _cmps(node):
+        kind = schema.get(field)
+        if kind not in (TEXT, LIST) or op not in (':', '='):
+            continue
+        if want == '*':                       # a presence check, not a value
+            continue
+        if _hits(rows, field, op, want, kind):
+            continue
+        column = [str(v) for v in _column(rows, field) if str(v)]
+        near = difflib.get_close_matches(str(want), column, n=3, cutoff=0.6)
+        if not near:
+            low = str(want).lower()
+            near = [v for v in column if low in v.lower()][:3]
+        msg = 'nothing has %s matching %r' % (field, want)
+        if near:
+            msg += '. Closest: %s' % ', '.join('"%s"' % v for v in near)
+        elif len(column) <= 12:
+            msg += '. This save has: %s' % ', '.join('"%s"' % v
+                                                     for v in sorted(column))
+        notes.append(msg)
+
+    for field in sorted(_negated_fields(node)):
+        blank = [r for r in matched if not [v for v in _values(r, field)
+                                            if str(v).strip()]]
+        if blank and len(blank) * 2 >= len(matched):
+            notes.append(
+                '%d of these %d have no %s at all, and "not %s" is true of '
+                'them. Add %s:* to require one.'
+                % (len(blank), len(matched), field, field, field))
+    return notes
+
+
 def run(rows, text, schema, free_fields):
-    """Filter `rows`. -> (matching rows, the parsed AST)."""
+    """Filter `rows`. -> (matching rows, notes worth reading).
+
+    The notes are not warnings about failure - the query ran. They are the
+    ways it can succeed at answering something else.
+    """
     node = parse(text, schema)
-    return [r for r in rows if match(node, r, schema, free_fields)], node
+    hits = [r for r in rows if match(node, r, schema, free_fields)]
+    return hits, diagnose(rows, node, schema, hits)
 
 
 # Kept here rather than in the docs so the tests and the pages use the same
@@ -258,6 +383,8 @@ EXAMPLES = [
     ('households with more than four Sims', 'size>4'),
     ('anyone poorer than 1000 simoleons', 'funds<1000'),
     ('households with no home at all', '-housed:true'),
+    ('single women, and only ones who actually live somewhere',
+     'size:1 gender:female world:*'),
     ('cats or dogs', 'species:cat OR species:dog'),
     ('rich families in Willow Creek or Oasis Springs',
      'funds>=50000 (world:"Willow Creek" OR world:"Oasis Springs")'),

@@ -67,9 +67,14 @@ ROWS = [
 ]
 
 
-def run(text):
-    hits, _node = rquery.run(ROWS, text, SCHEMA, FREE)
+def run(text, rows=None):
+    hits, _notes = rquery.run(rows or ROWS, text, SCHEMA, FREE)
     return sorted(r['name'] for r in hits)
+
+
+def notes(text, rows=None):
+    _hits, out = rquery.run(rows or ROWS, text, SCHEMA, FREE)
+    return out
 
 
 class TheQuestionFromTheBrief(unittest.TestCase):
@@ -235,6 +240,78 @@ class ItRefusesRatherThanMatchingNothing(unittest.TestCase):
             run('name>Goth')
 
 
+class ItSaysWhenItAnsweredSomethingElse(unittest.TestCase):
+    """The query ran. That is the problem: each of these succeeds, returns a
+    plausible list, and answers a slightly different question than the one
+    asked. All three were found by using the thing rather than by testing it."""
+
+    def test_an_unquoted_two_word_value_is_pointed_out(self):
+        """`world:Willow Creek` is `world:Willow` AND the loose word `Creek`.
+        On the real save it even returned a plausible count, because every
+        Willow Creek household contains "Creek" in its world anyway."""
+        got = notes('world:Willow Creek')
+        self.assertTrue(any('did you mean world:"Willow Creek"' in n
+                            for n in got), got)
+
+    def test_the_note_is_silent_when_the_quotes_are_there(self):
+        self.assertEqual(notes('world:"Willow Creek"'), [])
+
+    def test_the_note_is_silent_when_the_loose_word_is_meant(self):
+        """Two terms that do not join into anything must not be nagged about,
+        or the note becomes noise and stops being read."""
+        self.assertEqual(notes('world:Windenburg Goth'), [])
+
+    def test_a_value_that_exists_nowhere_is_pointed_out(self):
+        """Zero results and an honest "you have none of those" are the same
+        screen. Only the tool can tell them apart."""
+        got = notes('world:Atlantis')
+        self.assertTrue(any('nothing has world matching' in n for n in got),
+                        got)
+
+    def test_it_suggests_what_the_column_actually_holds(self):
+        got = ' '.join(notes('world:Windenberg'))       # e for u
+        self.assertIn('Windenburg', got)
+
+    def test_a_value_that_does_exist_is_not_pointed_out(self):
+        self.assertEqual(notes('world:Windenburg'), [])
+
+    def test_a_negation_dominated_by_rows_with_no_value_is_pointed_out(self):
+        """The one that started this: `-world:Windenburg` is true of every
+        homeless household, and on the real save they were 34 of the 41 rows
+        returned. Correct, and not what was asked."""
+        got = notes('size:1 gender:female -world:Windenburg')
+        self.assertTrue(any('have no world at all' in n for n in got), got)
+
+    def test_the_note_names_how_to_fix_it(self):
+        got = ' '.join(notes('size:1 gender:female -world:Windenburg'))
+        self.assertIn('world:*', got)
+
+    def test_star_requires_the_field_to_have_a_value(self):
+        self.assertNotIn('Drifter', run('world:*'))
+        self.assertIn('Goth', run('world:*'))
+
+    def test_star_silences_the_note_because_it_fixes_the_query(self):
+        self.assertEqual(
+            notes('size:1 gender:female world:* -world:Windenburg'), [])
+
+    def test_star_is_not_reported_as_a_value_that_exists_nowhere(self):
+        """It is a presence check, not a value to look up. Reporting it as
+        missing made the fix for one note produce another."""
+        self.assertEqual(notes('world:*'), [])
+
+    def test_a_minority_of_blank_rows_is_not_worth_a_note(self):
+        """A note that fired on any blank row at all would appear on almost
+        every negation and stop being read.
+
+        One row has to actually be in Windenburg, or the "nothing has world
+        matching Windenburg" note fires instead and this passes for the wrong
+        reason - which is what it did on the first run.
+        """
+        rows = [hh('A'), hh('B', 'Windenburg'), hh('C'),
+                dict(hh('D'), world='')]
+        self.assertEqual(notes('-world:Windenburg', rows), [])
+
+
 class TheExamplesAreReal(unittest.TestCase):
     """The page prints these as clickable hints and the terminal accepts them.
     A syntax the docs advertise and the engine rejects cannot survive this."""
@@ -242,7 +319,7 @@ class TheExamplesAreReal(unittest.TestCase):
     def test_every_documented_example_parses_and_runs(self):
         for label, qs in rquery.EXAMPLES:
             with self.subTest(example=qs):
-                hits, _node = rquery.run(ROWS, qs, SCHEMA, FREE)
+                hits, _notes = rquery.run(ROWS, qs, SCHEMA, FREE)
                 self.assertIsInstance(hits, list, label)
 
     def test_every_example_has_a_plain_english_label(self):

@@ -117,11 +117,36 @@ makes `gender:female` mean *somebody here is female* rather than requiring a
 household to be female. Fields for the save report: `name world lot creator
 member gender age species funds size people pets housed`.
 
-**Two rules that stop it lying.** An unknown field is an **error**, not an empty
+**Rules that stop it lying.** An unknown field is an **error**, not an empty
 result — those look identical and people read the second as "there are none of
-those in my save". And an absent value still matches a negation, so
-`-world:Windenburg` keeps the 73 households that have no world at all rather
-than silently dropping 40% of the save.
+those in my save". An absent value still matches a negation, so
+`-world:Windenburg` keeps the 73 households that have no world. And ordering a
+text field is refused at parse time: `name>Goth` used to match nothing and look
+like an answer.
+
+### It tells you when it answered something else
+
+The query ran, returned a plausible list, and answered a different question.
+Three ways that happens, all found by using it rather than testing it — each
+now prints a note beside the result, in the page and in the terminal:
+
+| you write | what happens | the note |
+| --- | --- | --- |
+| `world:Willow Creek` | parses as `world:Willow` **AND** the loose word `Creek` | *did you mean `world:"Willow Creek"`?* |
+| `world:Atlantis` | zero rows, identical to an honest "you have none" | *nothing has world matching "Atlantis". Closest: …* |
+| `-world:Windenburg` | true of every **homeless** household — 34 of the 41 rows on a real save | *34 of these 41 have no world at all. Add `world:*` to require one.* |
+
+`field:*` means **has one at all**, which is how you exclude the rows that make
+a negation surprising:
+
+```bash
+py scripts/save_report.py --query 'size:1 gender:female world:* -world:Windenburg'
+→ 7, all of whom actually live somewhere
+```
+
+That last one matters when writing a query for somebody. *"Single women outside
+Windenburg"* almost certainly means women who live somewhere; without `world:*`
+five sixths of the answer is the homeless pool.
 
 ### Writing the query for somebody
 
@@ -140,7 +165,7 @@ disagree.
 | they ask | you write |
 | --- | --- |
 | who lives alone? | `size:1` |
-| any single women outside Windenburg? | `size:1 gender:female -world:Windenburg` |
+| any single women outside Windenburg? | `size:1 gender:female world:* -world:Windenburg` |
 | which families are broke? | `funds<1000` |
 | who has pets? | `pets>0` |
 | show me the cat people | `species:cat` |
@@ -149,10 +174,11 @@ disagree.
 | the Goths, exactly | `name=Goth` |
 | elders living with an animal | `age:elder pets>0` |
 
-**Check it before you hand it over.** Run `--query` first: if it errors, the
-error names the valid fields, and if it returns nothing that is worth saying
-rather than sending somebody to an empty page. A query is a claim about their
-save like any other on that page.
+**Check it before you hand it over.** Run `--query` first and **read the
+NOTE lines** — they are the difference between the query you wrote and the
+question you were asked. If it errors, the error names the valid fields; if it
+returns nothing, say so rather than sending somebody to an empty page. A query
+is a claim about their save like any other on that page.
 
 `savegame.py` is the reader. There is **no published schema**, so nothing in its
 field map is quoted from one and nothing is guessed either — each field was

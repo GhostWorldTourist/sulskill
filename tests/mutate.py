@@ -162,6 +162,25 @@ MUTATIONS += [
      "        return False",
      'test_not_equals_includes_rows_that_omit_the_field'),
 
+    ('silent-typo: a value that exists nowhere reported as an honest zero',
+     f'{DOCTOR}/rquery.py',
+     "        msg = 'nothing has %s matching %r' % (field, want)",
+     "        continue\n"
+     "        msg = 'nothing has %s matching %r' % (field, want)",
+     'test_a_value_that_exists_nowhere_is_pointed_out'),
+
+    ('silent-unquoted: a two-word value silently split into two terms',
+     f'{DOCTOR}/rquery.py',
+     "        if _hits(rows, field, op, joined, kind):",
+     "        if False:",
+     'test_an_unquoted_two_word_value_is_pointed_out'),
+
+    ('silent-blanks: a negation dominated by rows with no value, unremarked',
+     f'{DOCTOR}/rquery.py',
+     "        if blank and len(blank) * 2 >= len(matched):",
+     "        if False:",
+     'test_a_negation_dominated_by_rows_with_no_value_is_pointed_out'),
+
     ('keep-list collision: a search term that also selects a mod to keep',
      f'{DOCTOR}/apply_plan.py',
      "        if n >= MIN_HITS and not any(c.lower() in k for k in keep_lower)}",
