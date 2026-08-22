@@ -49,8 +49,55 @@ things that repeat forever are left alone. That distinction is the point: tests
 written by reading an implementation encode its bugs as intent and then defend
 them. **Where a test here disagrees with the code, the test is right.**
 
-Each group was checked by mutation — break the property deliberately, confirm
-that group fails and the others do not. Fourteen mutations for the groups above,
+### The mutation harness is now a script, not a memory
+
+```
+py tests/mutate.py                  # all of them
+py tests/mutate.py charset staging  # by substring
+```
+
+Everything below this line was learned by mutating **by hand** and writing the
+result down. That taught the lessons and preserved none of the checks: a change
+that blinds a test cannot be caught by a round of mutations nobody can re-run.
+`tests/mutate.py` makes it a thing you run. The discipline is borrowed from
+cyberwise's `Test-ToolMutations.ps1`, which had already made it permanent.
+
+Every mutation in it is a defect that was really here, restored verbatim, and
+the rules it enforces are the ones that stop a harness lying to you:
+
+- **A copy, never the real tree.** A mutation left behind by a crashed run is a
+  defect committed by accident.
+- **The baseline must pass first**, or nothing below it means anything.
+- **Assert the test that OWNS the mutation fails**, not that *something* did.
+  "The suite went red" is satisfied by an unrelated flake.
+- **Confirm the heal** after each restore, so a bad restore cannot poison the
+  results that follow.
+- **Say when a mutation no longer applies.** A changed anchor is reported
+  loudly, never as "not detected".
+- **A fresh interpreter per run.** Python caches modules, and this suite
+  reloads and patches shared ones.
+- **Normalise line endings before matching**, because this repository checks
+  out CRLF on Windows and its sources are written LF.
+
+Two of those earned their place on the first run. *Assert the owner* caught a
+mutation attributed to the wrong test - it failed four tests, none of them the
+one named. And *the bug was put back and every test still passed* found a guard
+nothing reached: `unhold_file` refuses to overwrite an occupied path, but
+`restore_all` is driven by `held()`, which files a rel present on both sides as
+a **conflict** and never offers it to `unhold_file`. The front door could not
+reach the last line of defence. It has a direct test now.
+
+That test then failed to fail, which is the better lesson. Written as
+`assertIn('already exists', err)` it passed with the guard removed, because
+Windows raises `FileExistsError` - *"Cannot create a file when that file
+already exists"* - and the substring matched the **OS error text**. An
+assertion has to name something only the code under test can produce: the
+guard's own words, and the fact that it returns before journalling, so a
+refusal leaves no `unhold` record while reaching the rename always writes an
+intent first.
+
+Each group was also checked by mutation - break the property deliberately,
+confirm that group fails and the others do not. Fourteen mutations for the groups above,
 fourteen caught; twenty-three more for `test_variants.py`, all caught; five for
 `CompileTimeReachability`, all caught; fifteen for `test_moodprint.py`, one
 escaping on the first pass; fifteen for `test_snapshot.py`, all caught; fourteen

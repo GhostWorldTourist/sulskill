@@ -187,6 +187,40 @@ class NothingIsOverwrittenAndNothingIsDeleted(unittest.TestCase):
                 self.assertEqual(f.read(), b'redeployed by the manager')
             self.assertTrue(os.path.exists(h.locate(rel('alpha.package'))))
 
+    def test_unhold_itself_refuses_an_occupied_path(self):
+        """Exercised directly, because nothing else reaches it.
+
+        `restore_all` is driven by `held()`, which files a rel present on BOTH
+        sides as a conflict and never offers it to `unhold_file` - so the guard
+        inside unhold_file is the last line of defence and no test through the
+        front door touches it. A mutation harness put the guard back to `if
+        False` and the whole suite stayed green, which is how this gap was
+        found rather than assumed.
+        """
+        with rig() as (tmp, root, h):
+            arm(h, ['alpha.package'])
+            live = os.path.join(root, rel('alpha.package'))
+            with open(live, 'wb') as f:
+                f.write(b'something else entirely')
+            ok, err = h.unhold_file(rel('alpha.package'))
+            self.assertFalse(ok)
+            # NOT assertIn('already exists'): with the guard removed, Windows
+            # raises FileExistsError - "Cannot create a file when that file
+            # already exists" - and that substring matched, so the test passed
+            # against the bug it was written for. Assert the guard's own words,
+            # which no OS message supplies.
+            self.assertIn('not overwriting it', err)
+            # And the discriminator that does not depend on wording at all: the
+            # guard returns BEFORE journalling, so a refusal leaves no unhold
+            # record. Reaching the rename writes an intent first, whether or
+            # not the rename then fails.
+            self.assertEqual([r for r in h.records()
+                              if r.get('op') == 'unhold'], [])
+            with open(live, 'rb') as f:
+                self.assertEqual(f.read(), b'something else entirely')
+            self.assertTrue(h.locate(rel('alpha.package')),
+                            'the held copy must still be there')
+
     def test_a_file_present_on_both_sides_is_a_conflict_not_a_restore(self):
         with rig() as (tmp, root, h):
             arm(h, ['alpha.package'])

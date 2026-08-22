@@ -116,12 +116,15 @@ Tools, and nothing else. No mod lists, no manifests, no conflict reports, no adu
 ## Tests
 
 ```
-py tests/run.py
+py tests/run.py       # the suite
+py tests/mutate.py    # prove the suite can fail
 ```
 
-307 tests, standard library only, about twelve seconds. They build synthetic mod installs in a temp directory, so they never touch your real library.
+439 tests, standard library only, about sixteen seconds. They build synthetic mod installs, packages and save files in a temp directory, so they never touch your real library.
 
-Every test here covers a **quiet** failure: one where the wrong answer and the right answer look identical from outside. A term that matches nothing, a package the reader could not open, a mod folder it never looked in: none of them raise, and all of them look exactly like a clean library. Most of the bugs they cover shipped first and were found by accident. See [tests/README.md](tests/README.md), which also records the mutation testing and the times the tests were the thing that was wrong.
+`tests/mutate.py` puts real defects back one at a time and asserts that the test which owns each one fails. A suite that has only ever run against working code has not been shown to detect anything.
+
+Every test here covers a **quiet** failure: one where the wrong answer and the right answer look identical from outside. A term that matches nothing, a package the reader could not open, a mod folder it never looked in: none of them raise, and all of them look exactly like a clean library. Most of the bugs they cover shipped first and were found by accident. See [tests/README.md](tests/README.md), which records the mutation testing and the times the tests were the thing that was wrong.
 
 ## Credits
 
