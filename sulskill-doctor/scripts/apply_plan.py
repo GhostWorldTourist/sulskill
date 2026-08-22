@@ -101,7 +101,8 @@ for m in d['keep']:
     lines.append(f"    {m}")
 
 out = os.path.join(gate.out_dir(), 'SFW_PROFILE_PLAN.txt')
-open(out, 'w', encoding='utf-8').write('\n'.join(lines))
+with open(out, 'w', encoding='utf-8') as fh:
+    fh.write('\n'.join(lines))
 print(f"wrote {out}  ({len(lines)} lines)")
 print(f"\n{len(groups)} search terms cover {len(excl)-len(leftovers)}/{len(excl)} mods:")
 for label, hit in groups:

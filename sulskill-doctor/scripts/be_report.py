@@ -69,7 +69,8 @@ def is_mod(cell):
 
 
 def parse(path):
-    raw = open(path, encoding='utf-8', errors='replace').read()
+    with open(path, encoding='utf-8', errors='replace') as fh:
+        raw = fh.read()
     body = re.sub(r'<(style|script).*?</\1>', '', raw, flags=re.S | re.I)
 
     pairs, current = [], None

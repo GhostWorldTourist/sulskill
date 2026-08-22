@@ -101,8 +101,9 @@ out = {'adult': sorted(adult), 'animation_props': sorted(props),
        'adjacent_not_sex': sorted(adjacent), 'keep': sorted(clean),
        'adult_bytes': sum(sizes[m] for m in adult),
        'prop_bytes': sum(sizes[m] for m in props)}
-json.dump(out, open(os.path.join(gate.out_dir(), 'adult_inventory.json'), 'w',
-                    encoding='utf-8'), indent=1)
+with open(os.path.join(gate.out_dir(), 'adult_inventory.json'), 'w',
+          encoding='utf-8') as fh:
+    json.dump(out, fh, indent=1)
 
 print(f"total mods       : {len(mods)}")
 print(f"  EXCLUDE (adult)  : {len(adult)}  ({out['adult_bytes']/1073741824:.2f} GB)")

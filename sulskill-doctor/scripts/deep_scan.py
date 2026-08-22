@@ -239,8 +239,9 @@ for rel in scripts:
     sinfo.append(d)
 report['scripts'] = sinfo
 
-json.dump(report, open(os.path.join(gate.out_dir(), 'report.json'), 'w',
-                       encoding='utf-8'), indent=1)
+with open(os.path.join(gate.out_dir(), 'report.json'), 'w',
+          encoding='utf-8') as fh:
+    json.dump(report, fh, indent=1)
 print("\n=== wrote report.json ===")
 print(f"identical duplicate sets : {len(dupes)}  ({wasted/1048576:.1f} MB wasted)")
 print(f"EA-override conflicts    : {len(conflicts)}")

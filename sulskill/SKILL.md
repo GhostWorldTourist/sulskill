@@ -44,7 +44,7 @@ what it appears to be.
 | part | for |
 | --- | --- |
 | **sulskill-worlds** | every world: map position, neighbours, pack, and what each mod calls it |
-| **sulskill-roster** | the premade Sims and households the game ships with |
+| **sulskill-roster** | the premade Sims the game ships with - and who lives in your save, as a page |
 
 ## Building mods
 

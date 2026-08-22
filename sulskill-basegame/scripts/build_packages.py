@@ -144,8 +144,20 @@ def main():
     t0 = time.time()
     pkgs = list(walk_packages(GAME))
     prio_cache = {}
-    jsonl = open(os.path.join(OUT, 'packages.jsonl'), 'w', encoding='utf-8')
-    keys = open(os.path.join(OUT, 'keys.bin'), 'wb')
+    # Both under `with`, because build_packs.py reads keys.bin back as a flat
+    # record array and trusts its length. An exception escaping the loop below
+    # used to leave whatever was still buffered unwritten, and a short keys.bin
+    # does not look short - it looks like a library with fewer resources in it.
+    with open(os.path.join(OUT, 'packages.jsonl'), 'w',
+              encoding='utf-8') as jsonl, \
+            open(os.path.join(OUT, 'keys.bin'), 'wb') as keys:
+        total, tombs = _index_all(pkgs, prio_cache, names, jsonl, keys)
+    sys.stderr.write('%d packages, %d entries, %d tombstones, %.1fs\n'
+                     % (len(pkgs), total, tombs, time.time() - t0))
+
+
+def _index_all(pkgs, prio_cache, names, jsonl, keys):
+    """Index every package into the two open output files. -> (entries, tombs)"""
     total = tombs = 0
     for ordinal, path in enumerate(pkgs):
         rel = os.path.relpath(path, GAME).replace('\\', '/')
@@ -197,10 +209,7 @@ def main():
             'type_names': {('0x%08X' % t): names.get(t)
                            for t in hist if names.get(t)},
         }) + '\n')
-    jsonl.close()
-    keys.close()
-    sys.stderr.write('%d packages, %d entries, %d tombstones, %.1fs\n'
-                     % (len(pkgs), total, tombs, time.time() - t0))
+    return total, tombs
 
 
 if __name__ == '__main__':

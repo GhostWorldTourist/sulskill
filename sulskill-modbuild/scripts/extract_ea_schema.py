@@ -120,7 +120,8 @@ for path in files:
 
 if not found:
     sys.exit("no Trait/Buff SimData found in EA packages")
-json.dump(found, open(OUT, 'w', encoding='utf-8', newline='\n'), indent=2)
+with open(OUT, 'w', encoding='utf-8', newline='\n') as fh:
+    json.dump(found, fh, indent=2)
 print(f"\nwrote {OUT}")
 for k, v in found.items():
     print(f"\n{k}  row_size={v['row_size']} schema_hash=0x{v['schema_hash']:08X}")

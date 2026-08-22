@@ -82,7 +82,8 @@ def adult_pattern():
     src = os.path.join(HERE, 'classify_adult.py')
     ns = {}
     try:
-        text = open(src, encoding='utf-8').read()
+        with open(src, encoding='utf-8') as fh:
+            text = fh.read()
         block = _re.search(r'^CERTAIN = re\.compile\(.*?^\]\), re\.I\)',
                            text, _re.S | _re.M)
         if block:

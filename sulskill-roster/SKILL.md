@@ -1,6 +1,6 @@
 ---
 name: sulskill-roster
-description: Extract the roster of premade Sims and households shipped with The Sims 4 - names, ages, genders, traits, household bios, and which world each lives in - from the game's own packages. Use when the user asks who the premade Sims are, what a premade household's story or traits are, or wants a searchable list of the default population.
+description: Read the population of The Sims 4 - the premade Sims and households shipped with the game (names, ages, genders, traits, bios, which world each lives in) from the game's own packages, and who actually lives in a player's own save, as a searchable HTML page covering life stages, household funds and which neighbourhoods filled up. Use when the user asks who the premade Sims are, what a premade household's story or traits are, wants a searchable list of the default population, or asks what is in their save file, who lives in their world, how many Sims they have, or wants a report about their save.
 ---
 
 
@@ -12,6 +12,8 @@ description: Extract the roster of premade Sims and households shipped with The 
 # Sims 4 premade roster
 
 `scripts/roster.py` builds a searchable roster of the Sims EA ships.
+`scripts/save_report.py` does the other half: who lives in the player's own
+world, as a page.
 
 ```bash
 py scripts/roster.py --rebuild            # full scan, a few minutes
@@ -19,7 +21,14 @@ py scripts/roster.py --search Goth
 py scripts/roster.py --region "Willow Creek"
 py scripts/roster.py --counts
 py scripts/roster.py --unplaced           # templates with no lot
+
+py scripts/save_report.py --list          # the saves on this machine
+py scripts/save_report.py --out ~/Downloads/save.html
 ```
+
+Supporting modules: `savegame.py` reads a `.save`; `s4io.py`, `idx.py`, `pb.py`
+and `s4types.py` are the DBPF, index, protobuf and resource-type helpers both
+commands sit on.
 
 The result is cached to `reference/roster.json`, which is **gitignored** - it is
 EA's game text, and it regenerates from a local install.
@@ -49,12 +58,82 @@ if it finds mods built around sexual abuse - child sexualisation, bestiality or 
 
 Full policy, including the categories no pattern can catch: [POLICY.md](../sulskill/POLICY.md)
 
-## Why the game files and not a save
+## Two different questions, two different sources
 
-Sim bios are not in a save at all. The only prose in a save's sim blob is the
-world description. Save sim data also sits behind a container layer that does not
-decode as protobuf from byte zero, and a played save carries the player's own
-edits mixed in with the premades. Game data gives the pristine roster.
+**"Who are the premades?"** — the game files, via `roster.py`. A played save has
+the player's own edits mixed in, and **Sim bios are not in a save at all**; the
+only prose beside a save's Sims is the world description. Game data gives the
+pristine roster.
+
+**"Who lives in *my* world?"** — the save, via `save_report.py`. That is a
+different question and the save is the only place that answers it.
+
+An earlier note here said save Sim data "does not decode as protobuf from byte
+zero". That is true of most resources in a `.save` and false of the one that
+matters. Corrected, because it is the sentence that would stop somebody looking:
+
+| resource | protobuf? |
+| --- | --- |
+| `0x0000000D` — the simulated world, one big message | **yes**, from byte zero after RefPack |
+| `0x00000006` — 393 of them, the bulk of the file | no |
+| `0x0000000F`, `0x00000010`, `0x00000014`, `0xE88DB35F` | no |
+
+## Your save, as a page
+
+```bash
+py scripts/save_report.py --list                    # which saves exist
+py scripts/save_report.py --out ~/Downloads/save.html
+py scripts/save_report.py --slot Slot_00000002.save --out ~/Downloads/s2.html
+```
+
+Population by life stage and gender, household funds, which neighbourhoods
+filled up and which nobody ever moved into, every household searchable. `--out`
+is required: the page is about one person's world and does not belong next to
+the code.
+
+`savegame.py` is the reader. There is **no published schema**, so nothing in its
+field map is quoted from one and nothing is guessed either — each field was
+fixed by reading real saves and then checked in a way that could fail:
+
+```
+top-level      4 worlds   5 households   6 Sims   7 lots
+world          1 id    3 name     10 description
+household      2 id    3 name      4 lot id    5 funds   21 creator
+sim            4 household id      5 first     6 last    7 gender  8 age  22 surname
+lot            1 id    2 name     10 world id  14 description
+```
+
+- `sim.household` was confirmed by **joining it**: 386 of 386 Sims joined, and
+  the join was checked against something it does not control — **family
+  coherence**. In a household of two or more, does a majority share one last
+  name? Real saves score 0.74–0.77; the same saves with members shuffled
+  between households score 0.00–0.01. The check fails below 0.40.
+
+  It deliberately does **not** compare a Sim's surname to their household's
+  *name*. Players rename households, marry Sims across them, take in roommates
+  and delete the premades outright — every one of those makes the two differ
+  while the join stays perfectly correct, and one renamed household makes all
+  of its members disagree at once. No threshold on that separates an edited
+  save from a broken reader. Coherence does.
+- `household.lot` joins only *some* households on purpose. The rest are the
+  game's unhoused pool, and reporting that as a failure would call a normal save
+  corrupt.
+- **Life stage and gender names are read out of the installed game**, from
+  `sims/sim_info_types.pyc`, not remembered. That is where `INFANT = 128` comes
+  from. A patch that adds a life stage is picked up rather than mislabelled.
+- **Nothing about pets, traits, skills or relationships is claimed.** No field
+  in the sample took species-shaped values, and a guess about somebody's game is
+  worse than a gap.
+
+`Save.verify()` re-runs every one of those checks against the save in front of
+it and the page prints the result either way. A renumbered field should make it
+say so, loudly, rather than quietly relabelling somebody's family.
+
+**This reports the save as it stands, not the population EA ships.** Premades
+the player deleted are absent; ones they renamed, aged up, moved or married off
+appear as they were left; Sims they made themselves are counted alongside. No
+Sim is labelled premade or player-made, because the save does not say. Use
+`roster.py` for the pristine roster and this for the lived-in one.
 
 ## The chain
 

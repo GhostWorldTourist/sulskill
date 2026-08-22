@@ -52,7 +52,8 @@ def _load_patterns():
     src = os.path.join(HERE, 'classify_adult.py')
     ns = {}
     try:
-        text = open(src, encoding='utf-8').read()
+        with open(src, encoding='utf-8') as fh:
+            text = fh.read()
         block = re.search(r'^CERTAIN = re\.compile\(.*?^\]\), re\.I\)',
                           text, re.S | re.M)
         if block:

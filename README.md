@@ -16,7 +16,7 @@ They read your library directly. Not the filenames, the actual DBPF contents: wh
 | **sulskill-basemental** | what Basemental Drugs has configured in a save (read-only) |
 | **sulskill-languages** | frankk's Language Barriers — which world speaks what |
 | **sulskill-worlds** | every world: map position, neighbours, pack, and what each mod calls it |
-| **sulskill-roster** | the premade Sims and households the game ships with |
+| **sulskill-roster** | the premade Sims the game ships with - and who lives in your save, as a page |
 | **sulskill-basegame** | build and query a full index of the base game — what an instance id is, whether a mod overrides EA tuning or invents its own, what a buff shows the player |
 | **sulskill-modbuild** | authoring `.package` files, SimData resources, tuning instance ids |
 

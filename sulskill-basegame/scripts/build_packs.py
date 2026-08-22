@@ -74,9 +74,11 @@ def pack_ids():
     pj = os.path.join(OUT, 'packages.jsonl')
     if not os.path.exists(pj):
         return {}
-    pk = {r['ordinal']: r['pack'] for r in
-          (json.loads(l) for l in open(pj, encoding='utf-8'))}
-    data = open(os.path.join(OUT, 'keys.bin'), 'rb').read()
+    with open(pj, encoding='utf-8') as fh:
+        pk = {r['ordinal']: r['pack'] for r in
+              (json.loads(l) for l in fh)}
+    with open(os.path.join(OUT, 'keys.bin'), 'rb') as fh:
+        data = fh.read()
     out = {}
     small = collections.defaultdict(set)     # pack -> {small group ids}
     for i in range(len(data) // REC.size):
