@@ -219,3 +219,23 @@ for personality traits only.
   clip bundle; coincidental matches in compressed data.
 - `SimInfo.18.1` holds large 64-bit varints that look like a trait list. They are
   not - real traits are the small ids at `30.10.1`.
+- **Telling which households in a save are EA's.** People assume this is
+  possible and it is not, so do not build a "premade / player-made" label and do
+  not accept a request to add one without reading this first.
+
+  Tested rather than assumed. Every household id in a real save was checked
+  against the game's shipped household data two ways: against the resource
+  instance ids, and against **every u64 at every byte offset** inside 755
+  `HOUSEHOLD_DESCRIPTION` and `HOUSEHOLD_BINARY` payloads — 590,620 distinct
+  values. Overlap: **0 of 181.** Household ids are minted when the world is
+  created; the link to the template a household came from is not carried into
+  the save.
+
+  Matching on *name* is the tempting fallback and is exactly the unreliable
+  thing: a player can name a household "Goth", and a player can rename the real
+  Goths. It produces a confident answer that is wrong in both directions.
+
+  And the concept does not survive contact even given a perfect origin marker.
+  "EA-made" would mean *started from an EA template* — not *is as EA made it*.
+  A premade the player has renamed, remade, aged up and married off would still
+  be flagged EA's, which is not what anyone asking the question means.
