@@ -29,22 +29,39 @@ second name for the staging inode, so moving the Mods-side name hides the mod
 and loses nothing; restoring is a rename back. Files are MOVED, never copied - a
 copy makes a new inode and silently breaks the manager's link to staging.
 
+Most players have no mod manager, and for them that paragraph is false: the
+deployed file is the only file, and moving it puts this tool in sole custody of
+somebody's mod. `install.py` tells the two apart by asking whether a second copy
+exists anywhere rather than by naming a manager, and `holdlog.py` performs every
+move through an append-only journal kept beside the files themselves - so the
+undo survives this script, its ledger, and the manager all being gone. Nothing
+is overwritten, nothing is deleted, and every collision is refused and reported.
+
+That split is the design and is worth keeping: WHAT to move is a judgement and
+lives here, in the strategy below. HOW to move it is not a judgement at all, and
+lives in holdlog.py, where it is boring, journalled and reversible.
+
     py scripts/bisect_mods.py plan cut.txt          what would move, what did not match
     py scripts/bisect_mods.py arm cut.txt --launch  move them out and start the game
     py scripts/bisect_mods.py check                 score the round, print the next set
     py scripts/bisect_mods.py restore               move everything back
-    py scripts/bisect_mods.py status                what is out; has the manager undone it
+    py scripts/bisect_mods.py status                what is out, and what is recoverable
+
+`holdlog.py status` and `holdlog.py restore` do the last two without this script
+at all, reading the journal in the holding directory. That is the recovery path
+when the ledger is gone.
 
 `--launch` is worth using every round. The tester's only irreducible job is
 watching the screen and saying what happened; making them go and start the game
 themselves hands back a context switch twenty times over. The game appearing IS
 the instruction.
 
-The manifest is not rewritten, so the manager still believes these mods are
-deployed. That is what makes arming and undoing a round instant - and it is also
-why any deploy or purge silently restores everything. Do not deploy mid-round,
-and do not run `resource_cfg.py --fix` mid-round either: it changes what loads,
-which is the variable under test.
+Under a manager the manifest is not rewritten, so the manager still believes
+these mods are deployed. That is what makes arming and undoing a round instant -
+and it is also why any deploy or purge silently restores everything. Do not
+deploy mid-round, and do not run `resource_cfg.py --fix` mid-round either: it
+changes what loads, which is the variable under test. Without a manager there is
+no such accident available, and no such safety net either.
 
 Named `bisect_mods` rather than `bisect` deliberately: every script here puts
 this directory at the front of sys.path, and a module called `bisect.py` shadows
@@ -54,7 +71,9 @@ modules that import it lazily - would silently get this one instead.
 import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import gate  # noqa: F401,E402  refusal gate - see _shared/gate.py
-import os, sys, json, re, time, errno, argparse, datetime
+import os, sys, json, re, time, argparse, datetime
+import holdlog
+import install as installinfo
 
 # Resolved at runtime so the skill works on any machine and no account name
 # is committed. Override with SIMS4_DIR if the game data lives elsewhere.
@@ -62,11 +81,13 @@ SIMS = _os.environ.get('SIMS4_DIR') or _os.path.join(
     _os.path.expanduser('~'), 'Documents', 'Electronic Arts', 'The Sims 4')
 ROOT = os.path.join(SIMS, 'Mods')
 
-# The holding directory has to sit on the same volume as Mods: os.rename across
-# volumes fails, and the copy-then-delete that would "work" instead breaks the
-# manager's hardlink. It must also live OUTSIDE Mods, or a Resource.cfg rule
-# deep enough to reach it would load the very files being hidden. A sibling of
-# Mods inside the Sims 4 user folder satisfies both.
+# The holding directory has to sit on the same volume as Mods: os.rename cannot
+# cross volumes, and the copy-then-delete that would "work" instead duplicates
+# the file rather than relocating it - which breaks a manager's hardlink to
+# staging, and on a manual install puts the only copy of a mod through a delete.
+# It must also live OUTSIDE Mods, or a Resource.cfg rule deep enough to reach it
+# would load the very files being hidden. A sibling of Mods inside the Sims 4
+# user folder satisfies both.
 HOLD = _os.environ.get('SULSKILL_BISECT_HOLD') or _os.path.join(
     SIMS, 'sulskill-bisect-hold')
 
@@ -84,10 +105,29 @@ def ledger_path():
     return os.path.join(gate.out_dir(), 'bisect_state.json')
 
 
+def hold(root=None):
+    """The journalled mover for this run. Everything on disk goes through it."""
+    return holdlog.Hold(HOLD, root or ROOT)
+
+
 def blank():
-    return {'target': None, 'hold': HOLD, 'moved': [], 'armed_at': None,
-            'mode': 'halving', 'candidates': [], 'cleared': [], 'named': [],
-            'clean_base': None, 'rounds': []}
+    """The strategy state, and only the strategy state.
+
+    What this holds is a judgement: which mods are still candidates, what has
+    been proven clean, which round we are on. Losing it costs an investigation
+    and nothing else.
+
+    What it deliberately does NOT hold is the record of which files are moved
+    out. That used to live here, and because this file is loaded with a bare
+    `except` that falls back to empty, a truncated write or a cleared
+    %LOCALAPPDATA% made `restore` say "nothing is out" while the files sat in
+    the holding directory. The files' own location is now the record - see
+    holdlog.py - and `round_disabled` below is only the names this round chose,
+    which is strategy, not custody.
+    """
+    return {'target': None, 'hold': HOLD, 'round_disabled': [],
+            'armed_at': None, 'mode': 'halving', 'candidates': [],
+            'cleared': [], 'named': [], 'clean_base': None, 'rounds': []}
 
 
 def load():
@@ -102,17 +142,32 @@ def load():
 
 
 def save(state):
-    with open(ledger_path(), 'w', encoding='utf-8') as f:
+    """Write via a temp file and os.replace, so an interrupted save leaves the
+    previous state rather than a truncated one. `open(path, 'w')` truncates
+    first, which is how the old ledger managed to come back empty."""
+    path = ledger_path()
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=1)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 def units(root):
-    """mod name -> [path relative to root].
+    """mod name -> [FILE path relative to root].
 
     The manager's deployment manifest is the accurate answer because one mod is
     many files with unrelated names. Without it - a manual install - the best
     available unit is a top-level entry in Mods, which is what a person moving
     files by hand would treat as one mod anyway.
+
+    A folder unit is expanded to the files inside it rather than handed on as a
+    single path. Renaming the folder would move the mod correctly and still be
+    wrong: the journal would record one entry named after a directory, the
+    holding directory would contain the files inside it, and reconciling those
+    two reports the directory as MISSING - the loudest thing this tool can say,
+    for a mod sitting safely on disk. One rel is one file, everywhere.
     """
     try:
         import variants
@@ -132,7 +187,17 @@ def units(root):
     for name in entries:
         if name.lower().endswith('.json'):
             continue
-        out[name] = [name]
+        full = os.path.join(root, name)
+        if os.path.isdir(full):
+            files = []
+            for dirpath, _dirs, fns in os.walk(full):
+                for fn in fns:
+                    files.append(os.path.relpath(os.path.join(dirpath, fn),
+                                                 root))
+            if files:
+                out[name] = sorted(files)
+        else:
+            out[name] = [name]
     return out
 
 
@@ -290,6 +355,10 @@ def cmd_plan(root, names):
     matched, missing = resolve(root, names)
     files = sum(len(v) for v in matched.values())
     print('target : %s' % root)
+    # The install shape decides what the warnings have to say, so it is printed
+    # before the plan rather than after somebody has already armed it.
+    for line in installinfo.describe(installinfo.detect(root)):
+        print(line)
     print('matched: %d mod(s), %d file(s)' % (len(matched), files))
     for name in sorted(matched):
         print('   %-55s %d file(s)' % (name, len(matched[name])))
@@ -306,48 +375,69 @@ def cmd_plan(root, names):
 
 def cmd_arm(root, names, start_game=False):
     state = load()
-    if state['moved']:
+    h = hold(root)
+
+    # What is out is answered by the holding directory, never by the ledger.
+    # The ledger can come back empty; the files cannot.
+    already = h.held()
+    if already['out'] or already['conflict']:
         print('%d file(s) are already out. Run restore first.'
-              % len(state['moved']), file=sys.stderr)
+              % (len(already['out']) + len(already['conflict'])),
+              file=sys.stderr)
+        print('\n'.join(holdlog.report(already)), file=sys.stderr)
         return 2
+
     matched, missing = resolve(root, names)
     if not matched:
         print('none of those names are deployed - nothing to move.',
               file=sys.stderr)
         return 2
 
+    # Everything that must hold is checked before the first file moves. A move
+    # that fails halfway leaves a library in a state nobody chose.
+    ok, why = h.preflight()
+    if not ok:
+        for line in why:
+            print(line, file=sys.stderr)
+        return 2
+
+    info = installinfo.detect(root)
+    h.open_session('bisect_mods', info)
+    for line in installinfo.describe(info):
+        print(line)
+    print('')
+
     moved, failed = [], []
     for name in sorted(matched):
         for rel in matched[name]:
-            src = os.path.join(root, rel)
-            dst = os.path.join(HOLD, rel)
-            if not os.path.exists(src):
-                continue
-            try:
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                if os.path.exists(dst):
-                    os.remove(dst)
-                os.rename(src, dst)      # same volume: inode preserved
+            ok, err = h.hold_file(name, rel)
+            if ok:
                 moved.append({'mod': name, 'rel': rel})
-            except OSError as exc:
-                if getattr(exc, 'errno', None) == errno.EXDEV:
-                    print('holding directory is on another volume:\n  %s\n'
-                          'Moving there would copy, which breaks the mod '
-                          "manager's hardlink.\nSet SULSKILL_BISECT_HOLD to a "
-                          'path on the same volume as Mods.' % HOLD,
-                          file=sys.stderr)
-                    _undo(root, moved)
-                    return 2
-                failed.append((rel, str(exc)))
+            elif err != 'not deployed':
+                failed.append((rel, err))
+
+    if failed and not info['second_copy']:
+        # No manager can put this right, so a half-armed round is not something
+        # to hand back to somebody. Undo it and let them fix the cause.
+        back, problems = h.restore_all()
+        print('could not arm the whole round, and this install has no second '
+              'copy to fall\nback on - so the round was undone. %d file(s) put '
+              'back.' % back, file=sys.stderr)
+        for rel, err in failed:
+            print('   FAILED %s  %s' % (rel, err), file=sys.stderr)
+        for rel, err in problems:
+            print('   STILL OUT %s  %s' % (rel, err), file=sys.stderr)
+        return 2
 
     if not state['candidates']:
         state['candidates'] = sorted(matched)
-    state.update({'target': root, 'hold': HOLD, 'moved': moved,
+    state.update({'target': root, 'hold': HOLD,
+                  'round_disabled': sorted({i['mod'] for i in moved}),
                   'armed_at': time.time()})
     save(state)
 
     print('armed: %d file(s) from %d mod(s) moved out'
-          % (len(moved), len(matched)))
+          % (len(moved), len({i['mod'] for i in moved})))
     if missing:
         print('skipped %d name(s) not deployed: %s'
               % (len(missing), ', '.join(missing)))
@@ -368,50 +458,34 @@ def cmd_arm(root, names, start_game=False):
     return 1 if failed else 0
 
 
-def _undo(root, moved):
-    for item in moved:
-        src = os.path.join(HOLD, item['rel'])
-        dst = os.path.join(root, item['rel'])
-        try:
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            os.rename(src, dst)
-        except OSError:
-            pass
-
-
 def cmd_restore():
+    """Put everything back, driven by the holding directory rather than the
+    ledger - so it works with a lost ledger, a corrupt one, or none at all."""
     state = load()
-    if not state['moved']:
+    h = hold(state.get('target'))
+    before = h.held()
+    if not (before['out'] or before['conflict'] or before['missing']):
         print('nothing is out')
         return 0
-    root = state['target']
-    back, failed = 0, []
-    for item in state['moved']:
-        src = os.path.join(state.get('hold') or HOLD, item['rel'])
-        dst = os.path.join(root, item['rel'])
-        if not os.path.exists(src):
-            failed.append((item['rel'], 'missing from the holding directory'))
-            continue
-        try:
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            os.rename(src, dst)
-            back += 1
-        except OSError as exc:
-            failed.append((item['rel'], str(exc)))
-    if failed:
-        # Keep only what could not go back, so a rerun finishes the job rather
-        # than losing track of the outstanding files.
-        outstanding = {rel for rel, _ in failed}
-        state['moved'] = [i for i in state['moved'] if i['rel'] in outstanding]
-        save(state)
-        print('restored %d, FAILED %d:' % (back, len(failed)))
-        for rel, why in failed:
-            print('   %s  %s' % (rel, why))
-        return 1
-    state['moved'], state['armed_at'] = [], None
-    save(state)
+
+    back, failed = h.restore_all()
     print('restored %d file(s)' % back)
-    return 0
+    if before['missing']:
+        print('\nMISSING - %d file(s) the journal recorded are on neither '
+              'side.' % len(before['missing']))
+        print('Something outside this tool moved or deleted them; they cannot '
+              'be restored')
+        print('from here. Reinstall those mods from their source:')
+        for i in before['missing'][:10]:
+            print('   %-50s (%s)' % (i['rel'], i['mod']))
+    for rel, why in failed:
+        print('   FAILED %-45s %s' % (rel, why))
+
+    if not failed:
+        state['armed_at'] = None
+        state['round_disabled'] = []
+        save(state)
+    return 1 if (failed or before['missing']) else 0
 
 
 def cmd_status():
@@ -425,22 +499,28 @@ def cmd_status():
     for r in state['rounds']:
         print('  round %-3d %-8s disabled %-4d -> %d candidate(s)'
               % (r['n'], r['outcome'], r['disabled'], r['remaining']))
-    if not state['moved']:
-        print('\nnothing is out')
-        return 0
-    mods = sorted({i['mod'] for i in state['moved']})
-    print('\n%d file(s) out, from %d mod(s):' % (len(state['moved']), len(mods)))
-    for name in mods:
-        print('   %s' % name)
-    root = state['target']
-    back = [i['rel'] for i in state['moved']
-            if os.path.exists(os.path.join(root, i['rel']))]
-    if back:
-        print('\nWARNING: %d file(s) are back in Mods - the mod manager '
-              'redeployed.\nThis round is void; restore and arm it again.'
-              % len(back))
+
+    root = state.get('target') or ROOT
+    h = hold(root)
+    held = h.held()
+    info = (installinfo.detect(held['root']) if held['root']
+            and os.path.isdir(held['root']) else None)
+    print('')
+    print('\n'.join(holdlog.report(held, info)))
+
+    if held['conflict']:
+        # Same observation, two different events. Under a manager it is a
+        # redeploy, which is routine and voids the round. Without one, nothing
+        # ordinary puts a file back, so it is worth saying so rather than
+        # blaming a manager that is not installed.
+        if info and info['kind'] == 'vortex':
+            print('\nThe mod manager redeployed. This round is void; restore '
+                  'and arm it again.')
+        else:
+            print('\nSomething outside this tool put those files back. This '
+                  'round is void.')
         return 1
-    return 0
+    return 1 if held['missing'] else 0
 
 
 def recommend(state):
@@ -504,7 +584,12 @@ def cmd_check(marker):
                   'the one being bisected.', file=sys.stderr)
             return 2
 
-    disabled = sorted({i['mod'] for i in state['moved']})
+    # What this round disabled is strategy, recorded when the round was armed.
+    # Deliberately not re-derived from the holding directory: the question here
+    # is what the round TESTED, and a file that has since been put back by a
+    # redeploy does not change that - it invalidates the round, which `status`
+    # reports separately.
+    disabled = sorted(state['round_disabled'])
     cands = set(state['candidates'])
     clean = not hits
     n = len(state['rounds']) + 1

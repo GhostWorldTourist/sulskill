@@ -385,7 +385,8 @@ class MovingIsReversible(unittest.TestCase):
             self.assertFalse(os.path.exists(live))
             run(['restore'])
             self.assertTrue(os.path.exists(live))
-            self.assertEqual(state()['moved'], [])
+            # What is out is answered by the holding directory, not the ledger.
+            self.assertEqual(bs.hold(root).held()['out'], [])
 
     def test_arming_twice_refuses(self):
         with rig() as (tmp, root):
@@ -395,15 +396,22 @@ class MovingIsReversible(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertIn('already out', out)
 
-    def test_interrupted_restore_keeps_only_the_outstanding(self):
+    def test_a_file_lost_from_the_hold_is_reported_not_dropped(self):
+        """A held file that is on neither side is the one case this tool
+        cannot fix, so it has to be the loudest thing it says. The old
+        behaviour was to record it as outstanding and print a generic failure,
+        which reads like something a rerun would clear up."""
         with rig() as (tmp, root):
             run(['arm', cuts(tmp, ['alpha', 'bravo']), '--root', root])
-            held = state()['moved']
-            os.remove(os.path.join(tmp, 'hold', held[0]['rel']))
-            code, _ = run(['restore'])
+            h = bs.hold(root)
+            gone = h.held()['out'][0]['rel']
+            os.remove(h.locate(gone))
+            code, out = run(['restore'])
             self.assertEqual(code, 1)
-            left = state()['moved']
-            self.assertEqual([i['rel'] for i in left], [held[0]['rel']])
+            self.assertIn('MISSING', out)
+            self.assertIn(gone, out)
+            # the other one still went home
+            self.assertEqual(h.held()['out'], [])
 
     def test_default_holding_directory_is_outside_mods(self):
         """Inside Mods, a deep enough Resource.cfg rule would load the very

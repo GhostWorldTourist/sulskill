@@ -161,6 +161,62 @@ scan silently samples a biased subset and can make a routine idiom look like a
 smoking gun. Search compiled members too (see the `zipimport` note under *Facts*
 for why source-only archives still load).
 
+### Moving files out without losing them
+
+Rounds are made cheap by moving deployed files out of `Mods` rather than driving
+the mod manager. **Check which kind of install you are on before saying that is
+harmless, because it is only harmless on one of them.**
+
+`scripts/install.py` answers it, and the question it asks is not "is this
+Vortex" but **if a file is moved out of Mods, does another copy still exist?**
+Naming the manager gets both edge cases backwards: a manager set to deploy by
+copy still has staging and is still recoverable, while a Vortex install whose
+staging folder has moved to another drive is not.
+
+| | second copy exists | no second copy |
+| --- | --- | --- |
+| what it means | staging holds the originals | the deployed file is the only file |
+| if the tool breaks | redeploy from the manager | this tool's holding directory is the only way back |
+| who | Vortex, MO2, any staging manager | **most players** — files dropped straight into Mods |
+
+Say which one it is, out loud, before arming anything. Everything reassuring
+that has ever been written about this being instant and reversible was written
+on a managed install.
+
+`scripts/holdlog.py` does the moving, and the rules are not negotiable:
+
+- **Moved, never copied.** A copy makes a new inode and breaks a hardlink
+  manager's link to staging.
+- **The filesystem is the truth, the journal is the map.** The holding directory
+  mirrors `Mods`, so its own layout is a restore plan — every held file comes
+  home with the journal deleted, the ledger gone, or both. This is not
+  hypothetical tidiness: the predecessor kept the list of moved files in one
+  JSON blob outside Mods, read it with a bare `except` that fell back to empty,
+  and so printed *"nothing is out"* over a full holding directory.
+- **Nothing is overwritten and nothing is deleted.** Every collision is refused
+  and reported, on the way out and on the way back.
+- **A file on neither side is `MISSING`, loudly.** It is the one case this
+  cannot repair, so silence about it is the worst available answer.
+- **Cross-volume is refused before the first move.** `os.rename` cannot cross
+  volumes and the copy-then-delete that would "work" duplicates the file instead
+  of relocating it — breaking a manager's hardlink, and on a manual install
+  putting the only copy of a mod through a delete.
+
+The undo does not need this skill. Point anyone at the holding directory:
+
+```bash
+py scripts/holdlog.py status     # what is out, and what it depends on
+py scripts/holdlog.py restore    # put it all back, journal or no journal
+```
+
+**On a manual install, check the layout before trusting a round.** Bisection
+assumes one unit is one mod. That holds for a folder per mod; it does not hold
+for a flat pile of loose `.package` files, where a mod shipping four files is
+four units and a round can disable half of one — which behaves exactly like a
+broken mod and is not one. `install.py` reports the shape and warns; a top-level
+folder holding dozens of packages is a category, not a mod, and bisecting names
+the folder rather than what is inside it.
+
 ### Guards as instruments
 
 When a mod's own bug takes the load down, a wrapper around the failing method
@@ -179,6 +235,8 @@ protect — a containment fix that fails open is worse than none.
 ```bash
 py scripts/evidence.py         # every diagnostic artifact, worth-reading first
 py scripts/bisect_mods.py      # isolate what breaks a load, without false clears
+py scripts/install.py          # library: managed or manual, and what the undo depends on
+py scripts/holdlog.py          # journalled move/restore; status and restore stand alone
 py scripts/deep_scan.py        # full audit -> report.json
 py scripts/resource_cfg.py     # what actually loads; --fix removes redundancy
 py scripts/snapshot.py         # diff mods vs last run; --save updates baseline
