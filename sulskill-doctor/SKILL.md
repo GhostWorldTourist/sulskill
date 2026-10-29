@@ -284,7 +284,26 @@ py scripts/manifest.py         # one-line description per mod; --hide-nsfw to om
 py scripts/commands.py         # console commands each script mod registers
 py scripts/commands_doc.py     # curated JSON -> a markdown doc (--out required)
 py scripts/commands_html.py    # curated JSON -> a searchable page (--out required)
+py scripts/vortex_state.py     # which Vortex mod deployed each file, and its display name
+py scripts/findings.py         # a findings JSON -> the findings page, re-checked against disk
+py scripts/dashboard.py        # one page over all of it; every view exports to PDF/MD/JSON
 ```
+
+## Dashboard and findings
+
+`dashboard.py` joins the library, the findings, console commands, the player's own
+builds and install health into one page, by **mod** - the Vortex mod when Vortex
+deployed it, else the folder it sits in - because that is what a player can
+search their manager for. Lead every report with that name and put the packages
+underneath. All of its inputs live in `gate.out_dir()`, never in this repo:
+`review.json` (findings, format in `findings.py`), `adult_inventory.json`,
+`variants.json`, and `dashboard.json` (the player's own builds; format in the
+`dashboard.py` docstring). Everything is optional.
+
+Findings are written once and read after every deploy, so `findings.py` keeps
+them true: a row whose files are all gone is dropped, a conflict left with fewer
+than two mods is over, and a removed file disappears from a live row. A row that
+asks for no action and changes nothing in game does not belong in the file at all.
 
 `deep_scan.py` reports: byte-identical duplicate packages, EA tuning overridden
 by 2+ mods (real conflicts), every package that overrides EA tuning with its
